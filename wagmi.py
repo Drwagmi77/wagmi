@@ -18,18 +18,20 @@ if not os.path.exists("logs"):
 # Define the log file path
 log_file = os.path.join("logs", "bot_logs.log")
 
-# Configure logging to output both to file and console.
+# Set up logging: only our own messages (INFO level) will be logged.
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler(log_file, mode='a'),
         logging.StreamHandler()
     ]
 )
-
 logger = logging.getLogger(__name__)
 logger.info("Logging setup complete. Bot is starting...")
+
+# Reduce Telethon internal logging noise:
+logging.getLogger("telethon").setLevel(logging.WARNING)
 
 # ===== CONFIGURATION =====
 
@@ -52,7 +54,7 @@ user_client = TelegramClient(user_session, api_id, api_hash)
 bot_client = TelegramClient(bot_session, api_id, api_hash)
 
 # Global mapping to track processed tokens by token name.
-# We now store token names in lowercase.
+# We store token names in lowercase.
 token_mapping = {}
 
 # ===== FLASK APP FOR RENDER DETECTION & LOG DOWNLOAD =====
@@ -70,7 +72,6 @@ def get_logs():
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
-    # Run on all interfaces so that Render can access the service.
     app.run(host='0.0.0.0', port=port)
 
 # ===== HELPER FUNCTIONS =====
@@ -96,31 +97,25 @@ def parse_tff_output(text: str) -> dict:
     Handles messages starting with both "📌" and "💊".
     """
     data = {}
-    # Try to extract token name using the "📌" pattern first.
     m = re.search(r"📌\s*([^\n⚠]+)", text)
     if m:
         token_name = m.group(1).strip()
     else:
-        # Fallback for messages starting with "💊": extract the first word after the emoji.
         m = re.search(r"💊\s*([^\s(]+)", text)
         token_name = m.group(1).strip() if m else "unknown token"
-    # Normalize: take only the first word and convert to lowercase.
     token_name = token_name.split()[0].lower()
     data["token_name"] = token_name
 
-    # Attempt to extract mint status, if present.
     m = re.search(r"🌿\s*Mint:\s*(\w+)", text)
     data["mint_status"] = m.group(1).strip() if m else "N/A"
 
-    # Extract liquidity status; handle optional dollar sign.
     m = re.search(r"Liq:\s*\$?([\d\.Kk]+)", text)
     data["liquidity_status"] = m.group(1).strip() if m else "N/A"
 
-    # Extract market cap; handle optional dollar sign.
     m = re.search(r"MC:\s*\$?([\d\.Kk]+)", text)
     data["market_cap"] = m.group(1).strip() if m else "N/A"
 
-    logger.info("Parsed TFF output (updated for 💊 messages) successfully.")
+    logger.info("TFF output parsed for token '%s'.", data["token_name"])
     return data
 
 def build_new_template(token_name: str, contract: str, market_cap: str,
@@ -130,7 +125,7 @@ def build_new_template(token_name: str, contract: str, market_cap: str,
     """
     template = (
         "🚀 New 💎 GEM Just Landed! 🚀\n\n"
-        f"💰 {token_name.capitalize()}– Ape in Before Liftoff!\n\n"
+        f"💰 {token_name.capitalize()} – Ape in Before Liftoff!\n\n"
         "💬 \"Degens move fast. Follow my lead, and wealth will follow. I have paved the way before—and I will do it again.\"\n\n"
         f"📊 Market Cap: {market_cap}\n"
         f"💦 Liquidity: {liquidity_status}\n"
@@ -182,8 +177,7 @@ async def get_tff_data(contract: str) -> dict:
     async def handler(event):
         received_text = event.raw_text.strip()
         received_time = event.date.strftime('%H:%M:%S') if event.date else "unknown"
-        logger.info(f"Received message from TFF bot at {received_time}")
-        # If the message starts with "📌" or "💊", accept immediately.
+        logger.info("TFF bot response received at %s.", received_time)
         if received_text.startswith("📌") or received_text.startswith("💊"):
             if not future.done():
                 future.set_result(event)
@@ -191,50 +185,45 @@ async def get_tff_data(contract: str) -> dict:
             async def set_fallback():
                 await asyncio.sleep(5)
                 if not future.done():
-                    logger.info("No preferred emoji found; accepting fallback message.")
+                    logger.info("No preferred emoji in TFF response; using fallback message.")
                     future.set_result(event)
             asyncio.create_task(set_fallback())
 
-    # Register the event handler BEFORE sending the message.
     user_client.add_event_handler(handler, events.NewMessage(chats='@ttfbotbot'))
     send_time = datetime.now().strftime('%H:%M:%S')
-    logger.info(f"Sending contract {contract} to TFF bot at {send_time}.")
+    logger.info("Sending contract %s to TFF bot at %s.", contract, send_time)
     await user_client.send_message('@ttfbotbot', contract)
-    logger.info(f"Sent contract {contract} to TFF bot, waiting for response...")
     try:
         event = await asyncio.wait_for(future, timeout=90)
     except asyncio.TimeoutError:
         logger.error("Timeout waiting for TFF bot's response.")
         user_client.remove_event_handler(handler)
         raise
-    # Remove the handler once we have the response.
     user_client.remove_event_handler(handler)
     tff_text = event.raw_text
-    logger.info(f"Full TFF bot response:\n{tff_text}")
+    logger.info("Full TFF bot response: %s", tff_text)
     tff_data = parse_tff_output(tff_text)
-    tff_data["contract"] = contract  # Ensure contract is set
+    tff_data["contract"] = contract
     return tff_data
 
 # ===== EVENT HANDLERS =====
 
-# 1. Main handler for new token announcements from the source channel.
 @user_client.on(events.NewMessage(chats=SOURCE_CHANNEL_ID))
 async def message_handler(event):
     text = event.raw_text
-    logger.info(f"Received message from source channel:\n{text}")
+    logger.info("Received channel message:\n%s", text)
 
     contract = extract_contract(text)
     if not contract:
-        logger.warning("No contract address found in message, skipping.")
+        logger.info("No contract address found in channel message; skipping.")
         return
 
     try:
         tff_data = await get_tff_data(contract)
     except Exception as e:
-        logger.error(f"Error obtaining TFF bot data: {e}")
+        logger.error("Error obtaining TFF bot data: %s", e)
         return
 
-    # Use normalized token name from TFF bot (which is in lowercase)
     token_name = tff_data.get("token_name", "unknown token")
     tff_data["contract"] = contract
     tff_data["chart_url"] = f"https://dexscreener.com/solana/{contract}"
@@ -247,12 +236,11 @@ async def message_handler(event):
         tff_data.get("mint_status", "N/A"),
         tff_data.get("chart_url", f"https://dexscreener.com/solana/{contract}")
     )
-    logger.info(f"Reformatted announcement message:\n{new_text}")
+    logger.info("Reformatted announcement message for '%s':\n%s", token_name, new_text)
 
     buttons = build_inline_buttons(tff_data)
-    # Store the token name (normalized) and its contract for later update messages.
     token_mapping[token_name] = contract
-    logger.info(f"Stored in token_mapping: {token_name} -> {contract}")
+    logger.info("Stored token mapping: %s -> %s", token_name, contract)
 
     try:
         await bot_client.send_file(
@@ -261,68 +249,59 @@ async def message_handler(event):
             caption=new_text,
             buttons=buttons
         )
-        logger.info("Reformatted announcement with custom GIF sent to target channel successfully.")
+        logger.info("Announcement sent to target channel with custom GIF for '%s'.", token_name)
     except Exception as e:
-        logger.error(f"Failed to send announcement to target channel: {e}")
+        logger.error("Failed to send announcement: %s", e)
 
-# 2. Handler for token update messages from the source channel.
 @user_client.on(events.NewMessage(chats=SOURCE_CHANNEL_ID))
 async def token_update_handler(event):
     text = event.raw_text
-    logger.info(f"Received update message:\n{text}")
+    logger.info("Received update message:\n%s", text)
 
-    # Normalize the text for condition checking.
     text_lower = text.lower()
     if "mc:" in text_lower and ("profit" in text_lower or "x" in text_lower):
-        logger.debug("Update message met condition for MC and profit/x.")
         # Extract token name using "$TokenName"
         token_match = re.search(r"\$(\w+)", text)
         token_name = token_match.group(1).lower().strip() if token_match else None
 
-        # If no token found, try fallback from token_mapping keys.
         if not token_name:
-            logger.debug("No token extracted via regex; trying fallback using stored token names.")
+            logger.info("Token name not extracted via regex; checking stored tokens.")
             for stored_token in token_mapping.keys():
                 if stored_token in text_lower:
                     token_name = stored_token
                     break
 
         if not token_name:
-            logger.warning("No token name found in update message, skipping update.")
+            logger.info("No token name found in update message; skipping update.")
             return
 
-        logger.info(f"Extracted token name: {token_name}")
+        logger.info("Update message token extracted: %s", token_name)
 
-        # Get the contract from the mapping.
         if token_name not in token_mapping:
-            logger.warning(f"Token {token_name} not found in token_mapping, proceeding with unknown_contract.")
+            logger.info("Token '%s' not found in stored mapping; using unknown_contract.", token_name)
             contract = "unknown_contract"
         else:
             contract = token_mapping[token_name]
 
-        # Extract market cap changes.
         mc_match = re.search(r"MC:\s*\$?([\dKk]+)\s*(?:->|[-–>→])\s*\$?([\dKk]+)", text)
         if mc_match:
             old_mc, new_mc = mc_match.group(1), mc_match.group(2)
         else:
             old_mc, new_mc = "N/A", "N/A"
-            logger.debug("Market cap change not found in update message.")
+            logger.info("Market cap change not found in update message for '%s'.", token_name)
 
-        # Extract profit information.
         profit_match = re.search(r"(\d+)%", text)
         profit_text = f"{profit_match.group(1)}%" if profit_match else "PROFITS"
         if not profit_match:
-            logger.debug("Profit percentage not found in update message.")
+            logger.info("Profit percentage not found in update message for '%s'.", token_name)
 
-        # Determine Trojan URL.
         trojan_match = re.search(r"(https://t\.me/solana_trojanbot\?start=\S+)", text)
         if trojan_match:
             trojan_url = trojan_match.group(1)
         else:
             trojan_url = f"https://t.me/solana_trojanbot?start=r-ttf-{contract}" if contract != "unknown_contract" else "https://t.me/solana_trojanbot"
-            logger.debug("Trojan URL not found in message; using fallback URL.")
+            logger.info("Using fallback Trojan URL for '%s'.", token_name)
 
-        # Build the update message.
         update_message = (
             "🚀 EARLY GEM HUNTERS WINNING BIG! 💎\n\n"
             f"💵 ${token_name.capitalize()} MC: ${old_mc} → ${new_mc} 📈\n"
@@ -332,30 +311,27 @@ async def token_update_handler(event):
 
         buttons = [[Button.url("DONT MISS OUT", trojan_url)]]
         try:
-            # Post update message to target channel with the custom GIF.
             await bot_client.send_file(
                 TARGET_CHANNEL_ID,
                 file=custom_gif_path,
                 caption=update_message,
                 buttons=buttons
             )
-            logger.info(f"Posted update message with custom GIF for {token_name}")
+            logger.info("Update message sent with custom GIF for '%s'.", token_name)
         except Exception as e:
-            logger.error(f"Failed to post update message: {e}")
+            logger.error("Failed to send update message for '%s': %s", token_name, e)
     else:
-        logger.info("Update message did not meet conditions (missing 'MC:' or profit/x), skipping.")
+        logger.info("Update message did not meet conditions; skipping update.")
 
 # ===== MAIN EXECUTION =====
 
 async def main():
     await user_client.start()
     await bot_client.start(bot_token=bot_token)
-    logger.info("User client (gobble) and Bot client (wobble) are running...")
-    # Run the user client until disconnected.
+    logger.info("User client and Bot client are running...")
     await user_client.run_until_disconnected()
 
 if __name__ == "__main__":
-    # Start the Flask web server in a background thread so Render detects a web service.
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
