@@ -11,14 +11,11 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 
 # ===== LOGGING CONFIGURATION =====
 
-# Create a logs directory if it doesn't exist
 if not os.path.exists("logs"):
     os.makedirs("logs")
 
-# Define the log file path
 log_file = os.path.join("logs", "bot_logs.log")
 
-# Set up logging: only our own messages (INFO level) will be logged.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -30,31 +27,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("Logging setup complete. Bot is starting...")
 
-# Reduce Telethon internal logging noise:
+# Suppress internal Telethon debug logs
 logging.getLogger("telethon").setLevel(logging.WARNING)
 
 # ===== CONFIGURATION =====
 
-api_id = 28885685  # Your API ID
-api_hash = 'c24e850a947c003557f614d6b34035d9'  # Your API hash
-user_session = 'gobble'  # Using the user session
-bot_session = 'wobble'   # Bot client session name
-bot_token = '7886946660:AAGXvcV7FS5uFduFUVGGzwwWg1kfua_Pzco'  # Your Bot Token
+api_id = 28885685
+api_hash = 'c24e850a947c003557f614d6b34035d9'
+user_session = 'gobble'
+bot_session = 'wobble'
+bot_token = '7886946660:AAGXvcV7FS5uFduFUVGGzwwWg1kfua_Pzco'
 
-# Channel details:
-SOURCE_CHANNEL_ID = -1001998961899  # Source channel (@gem_tools_calls)
-TARGET_CHANNEL_ID = -1002405509240   # Target channel (Wagmi Vip ☢️)
+SOURCE_CHANNEL_ID = -1001998961899   # Source channel (@gem_tools_calls)
+TARGET_CHANNEL_ID = -1002405509240    # Target channel (Wagmi Vip ☢️)
 TARGET_CHANNEL_TITLE = "Wagmi Vip ☢️"  # For logging purposes
 
-# Custom file path – using the new video link as our custom GIF path.
 custom_gif_path = "https://dl.dropboxusercontent.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6s"
 
 # ===== INITIALIZE CLIENTS =====
 user_client = TelegramClient(user_session, api_id, api_hash)
 bot_client = TelegramClient(bot_session, api_id, api_hash)
 
-# Global mapping to track processed tokens by token name.
-# We store token names in lowercase.
+# Global mapping to track processed tokens by token name (stored in lowercase)
 token_mapping = {}
 
 # ===== FLASK APP FOR RENDER DETECTION & LOG DOWNLOAD =====
@@ -64,7 +58,6 @@ app = Flask(__name__)
 def index():
     return "Service is running", 200
 
-# Route to download the log file
 @app.route('/logs')
 def get_logs():
     logger.info("Log file download requested.")
@@ -77,9 +70,6 @@ def run_flask():
 # ===== HELPER FUNCTIONS =====
 
 def extract_contract(text: str) -> str | None:
-    """
-    Extracts a Solana contract address.
-    """
     pattern = r"Contract Address:\s*\n\s*([A-Za-z0-9]{32,50})"
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
@@ -91,11 +81,6 @@ def extract_contract(text: str) -> str | None:
     return tokens[0].strip() if tokens else None
 
 def parse_tff_output(text: str) -> dict:
-    """
-    Parses the output from TFF bot and returns a dictionary with:
-    token_name, market_cap, mint_status, and liquidity_status.
-    Handles messages starting with both "📌" and "💊".
-    """
     data = {}
     m = re.search(r"📌\s*([^\n⚠]+)", text)
     if m:
@@ -120,9 +105,6 @@ def parse_tff_output(text: str) -> dict:
 
 def build_new_template(token_name: str, contract: str, market_cap: str,
                        liquidity_status: str, mint_status: str, chart_url: str) -> str:
-    """
-    Builds the new announcement message template.
-    """
     template = (
         "🚀 New 💎 GEM Just Landed! 🚀\n\n"
         f"💰 {token_name.capitalize()} – Ape in Before Liftoff!\n\n"
@@ -145,9 +127,6 @@ def build_new_template(token_name: str, contract: str, market_cap: str,
     return template
 
 def build_inline_buttons(tff_data: dict) -> list:
-    """
-    Builds inline buttons for the initial announcement message.
-    """
     contract = tff_data.get("contract", "")
     row1 = [
         Button.url("View Chart", f"https://dexscreener.com/solana/{contract}"),
@@ -167,10 +146,6 @@ def build_inline_buttons(tff_data: dict) -> list:
     return [row1, row2, row3, row4]
 
 async def get_tff_data(contract: str) -> dict:
-    """
-    Registers the handler before sending the contract, then sends the contract to the TFF bot
-    and waits for its detailed response.
-    """
     loop = asyncio.get_event_loop()
     future = loop.create_future()
 
@@ -213,9 +188,15 @@ async def message_handler(event):
     text = event.raw_text
     logger.info("Received channel message:\n%s", text)
 
+    # Skip messages that look like updates to avoid processing them as announcements
+    text_lower = text.lower()
+    if "mc:" in text_lower and ("profit" in text_lower or "x" in text_lower):
+        logger.info("Message appears to be an update; skipping announcement handler.")
+        return
+
     contract = extract_contract(text)
     if not contract:
-        logger.info("No contract address found in channel message; skipping.")
+        logger.info("No contract address found in channel message; skipping announcement.")
         return
 
     try:
@@ -236,7 +217,7 @@ async def message_handler(event):
         tff_data.get("mint_status", "N/A"),
         tff_data.get("chart_url", f"https://dexscreener.com/solana/{contract}")
     )
-    logger.info("Reformatted announcement message for '%s':\n%s", token_name, new_text)
+    logger.info("Reformatted announcement for '%s':\n%s", token_name, new_text)
 
     buttons = build_inline_buttons(tff_data)
     token_mapping[token_name] = contract
@@ -260,7 +241,6 @@ async def token_update_handler(event):
 
     text_lower = text.lower()
     if "mc:" in text_lower and ("profit" in text_lower or "x" in text_lower):
-        # Extract token name using "$TokenName"
         token_match = re.search(r"\$(\w+)", text)
         token_name = token_match.group(1).lower().strip() if token_match else None
 
@@ -311,11 +291,13 @@ async def token_update_handler(event):
 
         buttons = [[Button.url("DONT MISS OUT", trojan_url)]]
         try:
+            # Send a threaded reply by replying to the update message.
             await bot_client.send_file(
-                TARGET_CHANNEL_ID,
+                event.chat_id,
                 file=custom_gif_path,
                 caption=update_message,
-                buttons=buttons
+                buttons=buttons,
+                reply_to=event.message.id
             )
             logger.info("Update message sent with custom GIF for '%s'.", token_name)
         except Exception as e:
