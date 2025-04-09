@@ -2,4 +2,4 @@ telethon
 httpx[http2]
 requests
 loguru
-python-dotenv
+flask
