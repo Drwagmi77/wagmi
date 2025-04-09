@@ -6,33 +6,43 @@ import threading
 from datetime import datetime
 
 import requests
+import httpx
 from flask import Flask
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 
 # ===== SUPABASE SETUP =====
-from supabase import create_client, Client
-
 SUPABASE_URL = "https://dbpgxflxpexjxgfeqyna.supabase.co"
 SUPABASE_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
     "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGd4Zmx4cGV4anhnZmVxeW5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4NDQwNzMsImV4cCI6MjA1OTQyMDA3M30."
     "HroOexM1Oo-VwufnpxVrdosf6UUgkXgv8zEk1ZB_xJ4"
 )
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+BASE_URL = f"{SUPABASE_URL}/rest/v1"  # Base URL for the REST API
+
+# Global headers for Supabase HTTP requests
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json"
+}
 
 # ===== LOGGING CONFIGURATION =====
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 log_file = os.path.join(LOG_DIR, "bot_logs.log")
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # Use INFO as the production log level
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(log_file, mode='a'), logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 logger.info("🔥 Logging setup complete. Bot is starting...")
+
+# Reduce verbosity for underlying HTTP libraries
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ===== TELEGRAM CONFIGURATION & GLOBAL CONSTANTS =====
 api_id = 28885685
@@ -60,111 +70,123 @@ DEFAULT_TARGET_CHANNEL = {
     "channel_type": "target"
 }
 
-# ===== HELPER: Run Supabase Query with Retry =====
-async def run_supabase_query(query_callable, retries=3, delay=2):
-    loop = asyncio.get_running_loop()
-    for attempt in range(retries):
-        try:
-            result = await loop.run_in_executor(None, query_callable)
-            return result
-        except Exception as e:
-            logger.error("Supabase query attempt %d failed: %s", attempt+1, e)
-            if attempt < retries - 1:
-                await asyncio.sleep(delay)
-            else:
-                raise
+# ===== SUPABASE HELPER VIA HTTPX (Async) =====
+async def supabase_request(method: str, table: str, params: dict = None, json_data: dict = None, retries: int = 3, delay: int = 2):
+    url = f"{BASE_URL}/{table}"
+    async with httpx.AsyncClient(http2=True, headers=SUPABASE_HEADERS) as client:
+        for attempt in range(retries):
+            try:
+                response = await client.request(method, url, params=params, json=json_data)
+                response.raise_for_status()
+                logger.debug("Supabase %s request to %s succeeded on attempt %d", method, table, attempt+1)
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                # Check for duplicate key error
+                if "duplicate key value violates unique constraint" in str(e):
+                    logger.info("Duplicate key error for table %s: %s", table, e)
+                    return None
+                else:
+                    logger.warning("Supabase %s request to %s attempt %d failed: %s", method, table, attempt+1, e)
+                    if attempt < retries - 1:
+                        await asyncio.sleep(delay)
+                    else:
+                        raise
+            except Exception as e:
+                logger.warning("Supabase %s request to %s attempt %d failed: %s", method, table, attempt+1, e)
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)
+                else:
+                    raise
 
-# ===== SUPABASE HELPER FUNCTIONS =====
+# ---- Supabase Table Functions ----
+
 async def get_admins():
-    response = await run_supabase_query(lambda: supabase.table("admins").select("*").execute())
+    data = await supabase_request("GET", "admins", params={"select": "*"})
     admins = {}
-    if response.data:
-        for record in response.data:
+    if data:
+        for record in data:
             admins[int(record["user_id"])] = record
     return admins
 
 async def add_admin(user_id: int, first_name: str, last_name: str = "", lang: str = "en", is_default: bool = False):
-    await run_supabase_query(lambda: supabase.table("admins").insert({
+    payload = {
         "user_id": user_id,
         "first_name": first_name,
         "last_name": last_name,
         "lang": lang,
         "is_default": is_default
-    }).execute())
+    }
+    await supabase_request("POST", "admins", json_data=payload)
 
 async def remove_admin(user_id: int):
-    await run_supabase_query(lambda: supabase.table("admins").delete().eq("user_id", user_id).execute())
+    # Delete record by filtering on user_id
+    await supabase_request("DELETE", "admins", params={"user_id": f"eq.{user_id}"})
 
 async def get_channels(channel_type: str):
-    response = await run_supabase_query(lambda: supabase.table("channels").select("*").eq("channel_type", channel_type).execute())
-    return response.data if response.data else []
+    data = await supabase_request("GET", "channels", params={"select": "*", "channel_type": f"eq.{channel_type}"})
+    return data if data else []
 
 async def add_channel(channel_id: int, username: str, title: str, channel_type: str):
-    await run_supabase_query(lambda: supabase.table("channels").insert({
+    payload = {
         "channel_id": channel_id,
         "username": username,
         "title": title,
         "channel_type": channel_type
-    }).execute())
+    }
+    await supabase_request("POST", "channels", json_data=payload)
 
 async def remove_channel(channel_id: int, channel_type: str):
-    await run_supabase_query(lambda: supabase.table("channels").delete().eq("channel_id", channel_id).execute())
+    await supabase_request("DELETE", "channels", params={"channel_id": f"eq.{channel_id}"})
 
 async def is_message_processed(chat_id: int, message_id: int) -> bool:
-    response = await run_supabase_query(lambda: supabase.table("processed_messages").select("*").eq("chat_id", chat_id).eq("message_id", message_id).execute())
-    return bool(response.data)
+    params = {"select": "*", "chat_id": f"eq.{chat_id}", "message_id": f"eq.{message_id}"}
+    data = await supabase_request("GET", "processed_messages", params=params)
+    return bool(data)
 
 async def record_processed_message(chat_id: int, message_id: int):
-    try:
-        await run_supabase_query(lambda: supabase.table("processed_messages").insert({
-            "chat_id": chat_id,
-            "message_id": message_id
-        }).execute())
-    except Exception as e:
-        if "duplicate key value violates unique constraint" in str(e):
-            logger.info("Processed message for chat_id %s, message_id %s already exists.", chat_id, message_id)
-        else:
-            raise
+    payload = {"chat_id": chat_id, "message_id": message_id}
+    await supabase_request("POST", "processed_messages", json_data=payload)
 
 async def is_contract_processed(contract_address: str) -> bool:
-    response = await run_supabase_query(lambda: supabase.table("processed_contracts").select("*").eq("contract_address", contract_address).execute())
-    return bool(response.data)
+    params = {"select": "*", "contract_address": f"eq.{contract_address}"}
+    data = await supabase_request("GET", "processed_contracts", params=params)
+    return bool(data)
 
 async def record_processed_contract(contract_address: str):
-    try:
-        await run_supabase_query(lambda: supabase.table("processed_contracts").insert({
-            "contract_address": contract_address
-        }).execute())
-    except Exception as e:
-        if "duplicate key value violates unique constraint" in str(e):
-            logger.info("Processed contract %s already exists.", contract_address)
-        else:
-            raise
+    payload = {"contract_address": contract_address}
+    await supabase_request("POST", "processed_contracts", json_data=payload)
 
 async def get_token_mapping(token_name: str):
-    response = await run_supabase_query(lambda: supabase.table("token_mappings").select("*").eq("token_name", token_name).execute())
-    if response.data:
-        return response.data[0]["contract_address"]
+    params = {"select": "*", "token_name": f"eq.{token_name}"}
+    data = await supabase_request("GET", "token_mappings", params=params)
+    if data:
+        return data[0]["contract_address"]
     return None
 
 async def add_token_mapping(token_name: str, contract_address: str):
-    await run_supabase_query(lambda: supabase.table("token_mappings").insert({
-        "token_name": token_name,
-        "contract_address": contract_address
-    }).execute())
+    payload = {"token_name": token_name, "contract_address": contract_address}
+    await supabase_request("POST", "token_mappings", json_data=payload)
 
 def get_bot_setting(setting: str):
-    response = supabase.table("bot_settings").select("*").eq("setting", setting).execute()
-    if response.data:
-        return response.data[0]["value"]
+    # For simplicity, we keep the bot_settings functions synchronous—
+    # you can modernize these similarly if needed.
+    import requests  # local import to avoid conflict with async httpx client
+    response = requests.get(f"{BASE_URL}/bot_settings", params={"select": "*", "setting": f"eq.{setting}"}, headers=SUPABASE_HEADERS)
+    response.raise_for_status()
+    data = response.json()
+    if data:
+        return data[0]["value"]
     return None
 
 def set_bot_setting(setting: str, value: str):
-    supabase.table("bot_settings").upsert({
+    import requests
+    payload = {
         "setting": setting,
         "value": value,
         "updated_at": datetime.utcnow().isoformat()
-    }).execute()
+    }
+    response = requests.post(f"{BASE_URL}/bot_settings", json=payload, headers=SUPABASE_HEADERS)
+    response.raise_for_status()
 
 # ===== HELPER FUNCTIONS (Token extraction, Parsing, Message Templates) =====
 def extract_contract(text: str) -> str | None:
@@ -173,19 +195,14 @@ def extract_contract(text: str) -> str | None:
 
 def parse_tff_output(text: str) -> dict:
     data = {}
-    # Ensure token name is retrieved, else default to "unknown"
     tm = re.search(r"📌\s*([^\n⚠]+)", text) or re.search(r"💊\s*([^\s(]+)", text)
     data["token_name"] = tm.group(1).strip().split()[0].lower() if tm else "unknown"
-    
     mint_match = re.search(r"🌿\s*Mint:\s*(\w+)", text)
     data["mint_status"] = mint_match.group(1) if mint_match else "N/A"
-    
     liq_match = re.search(r"Liq:\s*\$?([\d\.Kk]+)", text)
     data["liquidity_status"] = liq_match.group(1) if liq_match else "N/A"
-    
     mc_match = re.search(r"MC:\s*\$?([\d\.Kk]+)", text)
     data["market_cap"] = mc_match.group(1) if mc_match else "N/A"
-    
     logger.info("✅ Parsed TFF output for token '%s'.", data["token_name"])
     return data
 
@@ -557,7 +574,6 @@ async def initialize_default_channels():
         logger.info("✅ Default target channel seeded.")
 
 async def main():
-    # Start both clients
     await user_client.start()
     await bot_client.start(bot_token=bot_token)
     await initialize_default_channels()

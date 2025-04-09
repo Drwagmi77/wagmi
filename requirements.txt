@@ -1,4 +1,6 @@
-Flask
-requests
-telethon
-supabase
+telethon>=1.24.0
+httpx[http2]>=0.24.0
+requests>=2.28.0
+loguru>=0.7.0
+supabase-py>=0.0.10
+python-dotenv>=1.0.0  # Optional, but great for separating secrets
