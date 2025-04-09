@@ -19,13 +19,15 @@ SUPABASE_KEY = (
     "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGd4Zmx4cGV4anhnZmVxeW5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4NDQwNzMsImV4cCI6MjA1OTQyMDA3M30."
     "HroOexM1Oo-VwufnpxVrdosf6UUgkXgv8zEk1ZB_xJ4"
 )
-BASE_URL = f"{SUPABASE_URL}/rest/v1"  # Base URL for the REST API
+BASE_URL = f"{SUPABASE_URL}/rest/v1"
 
 # Global headers for Supabase HTTP requests
 SUPABASE_HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    # ← ignore duplicate-key errors on inserts
+    "Prefer": "resolution=ignore-duplicates"
 }
 
 # ===== LOGGING CONFIGURATION =====
@@ -33,7 +35,7 @@ LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 log_file = os.path.join(LOG_DIR, "bot_logs.log")
 logging.basicConfig(
-    level=logging.INFO,  # Use INFO as the production log level
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(log_file, mode='a'), logging.StreamHandler()]
 )
@@ -71,28 +73,47 @@ DEFAULT_TARGET_CHANNEL = {
 }
 
 # ===== SUPABASE HELPER VIA HTTPX (Async) =====
-async def supabase_request(method: str, table: str, params: dict = None, json_data: dict = None, retries: int = 3, delay: int = 2):
+async def supabase_request(
+    method: str,
+    table: str,
+    params: dict = None,
+    json_data: dict = None,
+    retries: int = 3,
+    delay: int = 2
+):
     url = f"{BASE_URL}/{table}"
     async with httpx.AsyncClient(http2=True, headers=SUPABASE_HEADERS) as client:
         for attempt in range(retries):
             try:
                 response = await client.request(method, url, params=params, json=json_data)
-                response.raise_for_status()
-                logger.debug("Supabase %s request to %s succeeded on attempt %d", method, table, attempt+1)
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                # Check for duplicate key error
-                if "duplicate key value violates unique constraint" in str(e):
-                    logger.info("Duplicate key error for table %s: %s", table, e)
+                # 1) handle duplicate-key conflict
+                if response.status_code == 409:
+                    logger.info("Supabase duplicate on %s: %s", table, response.text)
                     return None
+                response.raise_for_status()
+                # 2) parse JSON if present
+                try:
+                    return response.json()
+                except ValueError:
+                    logger.debug(
+                        "Supabase %s returned no JSON (status %d)",
+                        table, response.status_code
+                    )
+                    return None
+            except httpx.HTTPStatusError as e:
+                logger.warning(
+                    "Supabase %s request to %s attempt %d failed: %s",
+                    method, table, attempt + 1, e
+                )
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)
                 else:
-                    logger.warning("Supabase %s request to %s attempt %d failed: %s", method, table, attempt+1, e)
-                    if attempt < retries - 1:
-                        await asyncio.sleep(delay)
-                    else:
-                        raise
+                    raise
             except Exception as e:
-                logger.warning("Supabase %s request to %s attempt %d failed: %s", method, table, attempt+1, e)
+                logger.warning(
+                    "Supabase %s request to %s attempt %d failed: %s",
+                    method, table, attempt + 1, e
+                )
                 if attempt < retries - 1:
                     await asyncio.sleep(delay)
                 else:
@@ -119,7 +140,6 @@ async def add_admin(user_id: int, first_name: str, last_name: str = "", lang: st
     await supabase_request("POST", "admins", json_data=payload)
 
 async def remove_admin(user_id: int):
-    # Delete record by filtering on user_id
     await supabase_request("DELETE", "admins", params={"user_id": f"eq.{user_id}"})
 
 async def get_channels(channel_type: str):
@@ -168,9 +188,6 @@ async def add_token_mapping(token_name: str, contract_address: str):
     await supabase_request("POST", "token_mappings", json_data=payload)
 
 def get_bot_setting(setting: str):
-    # For simplicity, we keep the bot_settings functions synchronous—
-    # you can modernize these similarly if needed.
-    import requests  # local import to avoid conflict with async httpx client
     response = requests.get(f"{BASE_URL}/bot_settings", params={"select": "*", "setting": f"eq.{setting}"}, headers=SUPABASE_HEADERS)
     response.raise_for_status()
     data = response.json()
@@ -179,7 +196,6 @@ def get_bot_setting(setting: str):
     return None
 
 def set_bot_setting(setting: str, value: str):
-    import requests
     payload = {
         "setting": setting,
         "value": value,
@@ -584,6 +600,7 @@ async def main():
     await user_client.run_until_disconnected()
 
 app = Flask(__name__)
+
 @app.route("/")
 def home():
     return "Telegram Bot is running!", 200
