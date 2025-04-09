@@ -2,5 +2,4 @@ telethon
 httpx[http2]
 requests
 loguru
-supabase-py
 python-dotenv
