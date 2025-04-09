@@ -115,19 +115,31 @@ async def is_message_processed(chat_id: int, message_id: int) -> bool:
     return bool(response.data)
 
 async def record_processed_message(chat_id: int, message_id: int):
-    await run_supabase_query(lambda: supabase.table("processed_messages").insert({
-        "chat_id": chat_id,
-        "message_id": message_id
-    }).execute())
+    try:
+        await run_supabase_query(lambda: supabase.table("processed_messages").insert({
+            "chat_id": chat_id,
+            "message_id": message_id
+        }).execute())
+    except Exception as e:
+        if "duplicate key value violates unique constraint" in str(e):
+            logger.info("Processed message for chat_id %s, message_id %s already exists.", chat_id, message_id)
+        else:
+            raise
 
 async def is_contract_processed(contract_address: str) -> bool:
     response = await run_supabase_query(lambda: supabase.table("processed_contracts").select("*").eq("contract_address", contract_address).execute())
     return bool(response.data)
 
 async def record_processed_contract(contract_address: str):
-    await run_supabase_query(lambda: supabase.table("processed_contracts").insert({
-        "contract_address": contract_address
-    }).execute())
+    try:
+        await run_supabase_query(lambda: supabase.table("processed_contracts").insert({
+            "contract_address": contract_address
+        }).execute())
+    except Exception as e:
+        if "duplicate key value violates unique constraint" in str(e):
+            logger.info("Processed contract %s already exists.", contract_address)
+        else:
+            raise
 
 async def get_token_mapping(token_name: str):
     response = await run_supabase_query(lambda: supabase.table("token_mappings").select("*").eq("token_name", token_name).execute())
