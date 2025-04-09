@@ -60,10 +60,23 @@ DEFAULT_TARGET_CHANNEL = {
     "channel_type": "target"
 }
 
+# ===== HELPER: Run Supabase Query with Retry =====
+async def run_supabase_query(query_callable, retries=3, delay=2):
+    loop = asyncio.get_running_loop()
+    for attempt in range(retries):
+        try:
+            result = await loop.run_in_executor(None, query_callable)
+            return result
+        except Exception as e:
+            logger.error("Supabase query attempt %d failed: %s", attempt+1, e)
+            if attempt < retries - 1:
+                await asyncio.sleep(delay)
+            else:
+                raise
+
 # ===== SUPABASE HELPER FUNCTIONS =====
 async def get_admins():
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, lambda: supabase.table("admins").select("*").execute())
+    response = await run_supabase_query(lambda: supabase.table("admins").select("*").execute())
     admins = {}
     if response.data:
         for record in response.data:
@@ -71,8 +84,7 @@ async def get_admins():
     return admins
 
 async def add_admin(user_id: int, first_name: str, last_name: str = "", lang: str = "en", is_default: bool = False):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("admins").insert({
+    await run_supabase_query(lambda: supabase.table("admins").insert({
         "user_id": user_id,
         "first_name": first_name,
         "last_name": last_name,
@@ -81,17 +93,14 @@ async def add_admin(user_id: int, first_name: str, last_name: str = "", lang: st
     }).execute())
 
 async def remove_admin(user_id: int):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("admins").delete().eq("user_id", user_id).execute())
+    await run_supabase_query(lambda: supabase.table("admins").delete().eq("user_id", user_id).execute())
 
 async def get_channels(channel_type: str):
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, lambda: supabase.table("channels").select("*").eq("channel_type", channel_type).execute())
+    response = await run_supabase_query(lambda: supabase.table("channels").select("*").eq("channel_type", channel_type).execute())
     return response.data if response.data else []
 
 async def add_channel(channel_id: int, username: str, title: str, channel_type: str):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("channels").insert({
+    await run_supabase_query(lambda: supabase.table("channels").insert({
         "channel_id": channel_id,
         "username": username,
         "title": title,
@@ -99,42 +108,35 @@ async def add_channel(channel_id: int, username: str, title: str, channel_type: 
     }).execute())
 
 async def remove_channel(channel_id: int, channel_type: str):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("channels").delete().eq("channel_id", channel_id).execute())
+    await run_supabase_query(lambda: supabase.table("channels").delete().eq("channel_id", channel_id).execute())
 
 async def is_message_processed(chat_id: int, message_id: int) -> bool:
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, lambda: supabase.table("processed_messages").select("*").eq("chat_id", chat_id).eq("message_id", message_id).execute())
+    response = await run_supabase_query(lambda: supabase.table("processed_messages").select("*").eq("chat_id", chat_id).eq("message_id", message_id).execute())
     return bool(response.data)
 
 async def record_processed_message(chat_id: int, message_id: int):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("processed_messages").insert({
+    await run_supabase_query(lambda: supabase.table("processed_messages").insert({
         "chat_id": chat_id,
         "message_id": message_id
     }).execute())
 
 async def is_contract_processed(contract_address: str) -> bool:
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, lambda: supabase.table("processed_contracts").select("*").eq("contract_address", contract_address).execute())
+    response = await run_supabase_query(lambda: supabase.table("processed_contracts").select("*").eq("contract_address", contract_address).execute())
     return bool(response.data)
 
 async def record_processed_contract(contract_address: str):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("processed_contracts").insert({
+    await run_supabase_query(lambda: supabase.table("processed_contracts").insert({
         "contract_address": contract_address
     }).execute())
 
 async def get_token_mapping(token_name: str):
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, lambda: supabase.table("token_mappings").select("*").eq("token_name", token_name).execute())
+    response = await run_supabase_query(lambda: supabase.table("token_mappings").select("*").eq("token_name", token_name).execute())
     if response.data:
         return response.data[0]["contract_address"]
     return None
 
 async def add_token_mapping(token_name: str, contract_address: str):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("token_mappings").insert({
+    await run_supabase_query(lambda: supabase.table("token_mappings").insert({
         "token_name": token_name,
         "contract_address": contract_address
     }).execute())
