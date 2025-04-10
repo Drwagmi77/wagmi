@@ -477,5 +477,8 @@ def start_bot():
     thread.start()
     return jsonify({"status": "starting"}), 202
 
+# ===== ENTRY POINT =====
 if __name__ == "__main__":
+    # auto‑start the Telegram bot alongside Flask
+    Thread(target=lambda: asyncio.run(main()), daemon=True).start()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
