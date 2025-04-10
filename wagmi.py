@@ -353,14 +353,19 @@ async def admin_private_handler(event):
 # ===== CHANNEL MESSAGE HANDLER =====
 @user_client.on(events.NewMessage)
 async def channel_handler(event):
-    if await is_message_processed(event.chat_id, event.id):
-        return
-    await record_processed_message(event.chat_id, event.id)
-
-    if get_bot_setting('bot_status') != 'running':
-        return
-    src_ids = [ch['channel_id'] for ch in await get_channels('source')]
+    # 1) ignore anything not from one of your source channels
+    src_ids = [c['channel_id'] for c in await get_channels('source')]
     if event.chat_id not in src_ids:
+        return
+
+    # 2) dedupe by the real message.id
+    msg_id = event.message.id
+    if await is_message_processed(event.chat_id, msg_id):
+        return
+    await record_processed_message(event.chat_id, msg_id)
+
+    # 3) respect paused/stopped state
+    if get_bot_setting('bot_status') != 'running':
         return
 
     txt = event.raw_text.strip()
