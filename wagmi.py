@@ -217,7 +217,7 @@ def add_token_mapping_sync(token_name, contract_address, announcement_message_id
             cur.execute("""
                 INSERT INTO token_mappings (token_name, contract_address, announcement_message_id)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (token_name) DO UPDATE 
+                ON CONFLICT (token_name) DO UPDATE
                 SET contract_address = %s, announcement_message_id = COALESCE(%s, token_mappings.announcement_message_id);
             """, (token_name, contract_address, announcement_message_id,
                   contract_address, announcement_message_id))
@@ -382,14 +382,14 @@ def extract_token_name_from_source(text: str) -> str:
     if not lines:
         logger.info("Empty message received; returning 'unknown'.")
         return "unknown"
-    
+
     for line in lines:
         match = re.search(r"\$([A-Za-z0-9_]+)", line)
         if match:
             token = match.group(1)
             logger.info(f"Token extracted: '{token}' from line: '{line}'")
             return token
-    
+
     logger.info("No valid token found in the message; returning 'unknown'.")
     return "unknown"
 
@@ -748,9 +748,22 @@ async def check_bot_admin() -> bool:
 # We add a simple Flask app that provides a health-check endpoint.
 app = Flask(__name__)
 
+@app.route('/')
+def root():
+    return jsonify(status="ok", message="Bot is running"), 200
+
 @app.route('/health')
 def health():
     return jsonify(status="ok"), 200
+
+def start_self_ping():
+    def ping_health():
+        try:
+            requests.get(f"http://localhost:{os.environ.get('PORT', '5000')}/health")
+            logger.info("✅ Self-ping successful")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Self-ping failed: {e}")
+        threading.Timer(4 * 60, ping_health).start()  # Ping every 4 minutes
 
 # ===== MAIN =====
 async def main():
@@ -793,13 +806,18 @@ async def main():
 
     logger.info("🚀 Bot is running.")
 
-    # 5) Run until disconnected
+    # 5) Start self-pinging
+    start_self_ping()
+
+    # 6) Run until disconnected
     await user_client.run_until_disconnected()
 
 if __name__ == '__main__':
     # Start Flask in a daemon thread so Render detects the webservice.
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True)
+    port = int(os.environ.get('PORT', 5000))
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True)
     flask_thread.start()
 
     # Run the Telegram bot's async main
     asyncio.run(main())
+
