@@ -1,0 +1,196 @@
+2025-05-01 18:57:07,682 - INFO - 🔥 Logging setup complete. Bot is starting...
+2025-05-01 18:57:07,880 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.122.56.201:5000
+2025-05-01 18:57:07,880 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 18:57:26,219 - INFO - Connecting to 149.154.167.51:443/TcpFull...
+2025-05-01 18:57:28,431 - INFO - Connection to 149.154.167.51:443/TcpFull complete!
+2025-05-01 18:57:44,614 - INFO - Phone migrated to 4
+2025-05-01 18:57:44,779 - INFO - Reconnecting to new data center 4
+2025-05-01 18:57:44,939 - INFO - Disconnecting from 149.154.167.51:443/TcpFull...
+2025-05-01 18:57:44,941 - INFO - Disconnection from 149.154.167.51:443/TcpFull complete!
+2025-05-01 18:57:44,942 - INFO - Connecting to 149.154.167.91:443/TcpFull...
+2025-05-01 18:57:46,838 - INFO - Connection to 149.154.167.91:443/TcpFull complete!
+2025-05-01 18:58:19,430 - INFO - Connecting to 149.154.167.51:443/TcpFull...
+2025-05-01 18:58:21,098 - INFO - Connection to 149.154.167.51:443/TcpFull complete!
+2025-05-01 18:58:22,149 - INFO - Phone migrated to 4
+2025-05-01 18:58:22,150 - INFO - Reconnecting to new data center 4
+2025-05-01 18:58:22,164 - INFO - Disconnecting from 149.154.167.51:443/TcpFull...
+2025-05-01 18:58:22,171 - INFO - Disconnection from 149.154.167.51:443/TcpFull complete!
+2025-05-01 18:58:22,175 - INFO - Connecting to 149.154.167.91:443/TcpFull...
+2025-05-01 18:58:24,174 - INFO - Connection to 149.154.167.91:443/TcpFull complete!
+2025-05-01 18:58:27,296 - INFO - No valid token found in the message; returning 'unknown'.
+2025-05-01 18:58:29,124 - INFO - No mapping found for announcement message id 1957
+2025-05-01 18:58:29,633 - INFO - 🚀 Bot is running.
+2025-05-01 18:59:03,388 - INFO - 📥 Received at 2025-05-01 17:59:03 UTC: 📢 PAID CALL - via @GemToolsAds_bot - DYOR -
+
+$BOOPAY - BOOPAY
+boMqCLoRJBtvuv5PKCL2B4wsWFyGJxi1BnsxgRMvS2a
+
+Market Cap: $45K
+
+📈 BullX | DexScreener | Photon
+
+Twitter: https://x.com/boopay_sol
+Website: https://www.boopay.fun
+
+📣 Sponsored: Abu $Obeida launching soon ! join us ✌🏻
+📣 Sponsored: Your ad could be here! Click to promote
+2025-05-01 18:59:07,626 - INFO - ➡️ Sending to TTF bot at 2025-05-01 17:59:03 UTC: boMqCLoRJBtvuv5PKCL2B4wsWFyGJxi1BnsxgRMvS2a
+2025-05-01 18:59:10,218 - INFO - ⬅️ Received from TTF bot at 2025-05-01 17:59:03 UTC:  📌 Boopay (BOOPAY)
+⚠ Mutable Metadata
+
+📌 Pair: HSF7...ANh1 
+👨‍💻 Deployer: dvck...AzWT
+👤 Owner: RENOUNCED
+🔸 Chain: SOL | ⚖️ Age: 1h 15m
+🌿 Mint: No ✅ | Liq: 🔥 (100%)
+⚡ Tro | Blz | Ban | Bit | Xero | Algora
+
+💰 MC: $49.6K | Liq: $13.8K (27%)
+📈 24h: 3413% | V: $101.7K | B:651 S:418
+📊 Axiom | PHO | PA | BL | GT | BE | DT | DS
+
+💲 Price: $0.000050
+💵 Launch MC: $927.58 (53x)
+👆 ATH: $115.2K (124x)
+👨‍👨‍👧‍👦 Scans: 23 | Votes: 0 👍, 0 👎 | Calls
+🔗 Website | Twitter
+
+📊 TS: 1.000B
+👩‍👧‍👦 Holders: 175 | Top10: 25.74%
+💸 Airdrops: 2 for a total of 100.00%
+🥡 Block 0 Snipes: 0.0% | 0.00 SOL
+👶🏽 Fresh Wallets: 0 | 0.00% BOOPAY
+
+💵 TEAM WALLETS
+Deployer 2.99 SOL | 0.0% BOOPAY
+
+DYOR/NFA: Automated report.
+
+AD: Axiom - The Future of Trading. Sign up here to save 10%!
+2025-05-01 18:59:10,226 - INFO - ✅ Parsed TTF output.
+2025-05-01 18:59:10,227 - INFO - Token extracted: 'BOOPAY' from line: '$BOOPAY - BOOPAY'
+2025-05-01 19:00:07,167 - INFO - Got difference for account updates
+2025-05-01 19:00:07,836 - INFO - Got difference for channel 2093384030 updates
+2025-05-01 19:00:15,652 - INFO - 📥 Received at 2025-05-01 18:00:15 UTC: 📢 PAID CALL - via @GemToolsAds_bot - DYOR -
+
+$BOOPAY - BOOPAY
+boMqCLoRJBtvuv5PKCL2B4wsWFyGJxi1BnsxgRMvS2a
+
+Market Cap: $45K
+
+📈 BullX | DexScreener | Photon
+
+Twitter: https://x.com/boopay_sol
+Website: https://www.boopay.fun
+
+📣 Sponsored: Your ad could be here! Click to promote
+2025-05-01 19:01:37,246 - INFO - Got difference for account updates
+2025-05-01 19:02:31,841 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:05:10,893 - INFO - Got difference for account updates
+2025-05-01 19:07:01,847 - INFO - Got difference for account updates
+2025-05-01 19:08:08,160 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:12:59,766 - INFO - Got difference for channel 2110626580 updates
+2025-05-01 19:13:19,763 - INFO - Got difference for channel 2406529719 updates
+2025-05-01 19:13:25,200 - INFO - Got difference for account updates
+2025-05-01 19:16:31,324 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:16:39,195 - INFO - Got difference for channel 2204270579 updates
+2025-05-01 19:16:56,742 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:17:15,357 - INFO - 📥 Received at 2025-05-01 18:17:15 UTC: 🎲 Ray new testing phase:
+
+PumpCoin - $Pump
+
+GTscore: 🌕🌘🌑🌑🌑
+
+First 10 BUYs:
+🌑🌑🌑🌑🌑🌑🌗🌑🌑🌑
+
+F4xueS2uMUb93dDJ95yawsZQcp838dsqoQsKSwYTGLcr
+
+Market Cap: $104k  - AGE: 414D 9m
+
+👪 Holders : 184 | Top10: 37.07% | Top20: 54.07%
+
+🐁 Insiders : 4.99% 🎯 Snipers: 0 💰 SmartWallets: 1
+
+🫧 Fresh : 10% ☢️ Jeeters: 15%
+
+👤 DEV (0%) Sold: 🔴 ⚡️ DEX PAID: 🟢
+
+📈 BullX | BullX Neo | PumpFun | Photon
+
+🔗 Socials: website | twitter
+
+📣 Promote your token now ! Click here to make a call
+2025-05-01 19:17:41,513 - INFO - ➡️ Sending to TTF bot at 2025-05-01 18:17:15 UTC: F4xueS2uMUb93dDJ95yawsZQcp838dsqoQsKSwYTGLcr
+2025-05-01 19:17:43,504 - INFO - ⬅️ Received from TTF bot at 2025-05-01 18:17:15 UTC:  📌 PumpCoin (Pump) | Pump Fun Token
+⚠ Looks clean to me
+
+📌 Pair: ALrL...SL7y 
+👨‍💻 Deployer: G4pN...oQji
+👤 Owner: RENOUNCED
+🔸 Chain: SOL | ⚖️ Age: 2m
+🌿 Mint: No ✅ | Liq: 🔥 (100%)
+⚡ Tro | Blz | Ban | Bit | Xero | Algora
+
+💰 MC: $181.4K | Liq: $46.6K (25%)
+📈 24h: 72.84% | V: $45.1K | B:181 S:147
+📊 Axiom | PHO | PA | BL | GT | BE | DT | DS
+
+💲 Price: $0.000181
+💵 Launch MC: $104.7K (1x)
+👆 ATH: $199.4K (1x)
+👨‍👨‍👧‍👦 Scans: 50 | Votes: 0 👍, 0 👎 | Calls
+🔗 Website | Twitter
+
+📊 TS: 1000.00M
+👩‍👧‍👦 Holders: 291 | Top10: 39.79%
+💸 Airdrops: 1 for a total of 3.36%
+🥡 Block 0 Snipes: 0.0% | 0.00 SOL
+👶🏽 Fresh Wallets: 0 | 0.00% Pump
+
+💵 TEAM WALLETS
+Deployer 0.00 SOL | 0.0% Pump
+
+DYOR/NFA: Automated report.
+
+⚡️PHOTON HYPERSPEED 3.0 - the fastest nodes in the world
+2025-05-01 19:17:43,505 - INFO - ✅ Parsed TTF output.
+2025-05-01 19:17:43,506 - INFO - Token extracted: 'Pump' from line: 'PumpCoin - $Pump'
+2025-05-01 19:19:23,073 - INFO - 📥 Received at 2025-05-01 18:19:23 UTC: X2
+2025-05-01 19:22:02,123 - INFO - Got difference for account updates
+2025-05-01 19:22:20,385 - INFO - Got difference for channel 1730427571 updates
+2025-05-01 19:26:10,532 - INFO - Got difference for account updates
+2025-05-01 19:26:36,452 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:27:42,563 - INFO - 📥 Received at 2025-05-01 18:27:42 UTC: 😕.
+2025-05-01 19:28:19,956 - INFO - Got difference for channel 2406529719 updates
+2025-05-01 19:28:59,973 - INFO - Got difference for channel 1730427571 updates
+2025-05-01 19:30:36,549 - INFO - 📥 Received at 2025-05-01 18:30:36 UTC: 💊 + GT + NEO
+This will be my printer tools in the upcoming days 🧐
+2025-05-01 19:31:15,707 - INFO - 📥 Received at 2025-05-01 18:31:15 UTC: DEAP ANALITICS FEATURES BULLX NEO BOT 🐂
+
+BEST TOOL TO DYOR RIGHT NOW
+
+Inspecting top holders wallets, dev, security….
+
+use the link bellow to GET an EARLY ACCESS + 10% Fee Discount👇
+
+https://t.me/BullxNeoBot?start=access_0CQBZZ8TG1DC
+
+🔑 Access code: access_0CQBZZ8TG1DC
+2025-05-01 19:31:39,582 - INFO - Got difference for channel 2204270579 updates
+2025-05-01 19:31:52,340 - INFO - 📥 Received at 2025-05-01 18:31:52 UTC: New here ? Read this 👆
+2025-05-01 19:32:27,684 - INFO - Got difference for channel 1920165799 updates
+2025-05-01 19:34:58,332 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:35:03,188 - INFO - Got difference for channel 2332487383 updates
+2025-05-01 19:35:35,673 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:36:15,065 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:36:20,242 - INFO - Got difference for channel 2360415486 updates
+2025-05-01 19:36:51,454 - INFO - 📥 Received at 2025-05-01 18:36:51 UTC: 🚀 $Pump ⚡️ DexBOOST DETECTED ⚡️
+
+📣 Sponsored: Promote your token now ! Click here to make a call
+2025-05-01 19:37:02,392 - INFO - Got difference for account updates
+2025-05-01 19:37:10,283 - INFO - Disconnecting from 149.154.167.91:443/TcpFull...
+2025-05-01 19:37:10,290 - INFO - Disconnection from 149.154.167.91:443/TcpFull complete!
