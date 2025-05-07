@@ -14,7 +14,7 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
 
-# ===== ENV / CONFIG =====
+===== ENV / CONFIG =====
 
 DB_NAME    = os.environ.get("DB_NAME", "wagmi_82kq")
 DB_USER    = os.environ.get("DB_USER", "wagmi_82kq_user")
@@ -26,17 +26,17 @@ API_HASH   = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", '7834122356:AAGszZL-bgmggu_77aH0_lszBqe-Rei25_w')
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
-# ===== FLASK APP & SESSION =====
+===== FLASK APP & SESSION =====
 
 app = Flask(name)
 app.secret_key = SECRET_KEY
 
-# ===== TELETHON CLIENTS =====
+===== TELETHON CLIENTS =====
 
 bot_client  = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
-# ===== DATABASE HELPERS (sync + async) =====
+===== DATABASE HELPERS (sync + async) =====
 
 def get_connection():
 return psycopg2.connect(
@@ -336,7 +336,7 @@ return val if val is not None else DEFAULT_BOT_SETTINGS.get(setting)
 async def set_bot_setting(setting, value):
 await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-# ===== DEFAULTS & LOGGING =====
+===== DEFAULTS & LOGGING =====
 
 DEFAULT_ADMIN_ID = 6489451767
 DEFAULT_SOURCE_CHANNEL = {
@@ -368,7 +368,7 @@ logging.StreamHandler()
 logger = logging.getLogger(name)
 logger.info("🔥 Logging setup complete. Bot is starting...")
 
-# ===== HELPER FUNCTIONS =====
+===== HELPER FUNCTIONS =====
 
 def extract_contract(text: str) -> str | None:
 m = re.findall(r"\b[A-Za-z0-9]{32,50}\b", text)
@@ -426,11 +426,11 @@ Button.url("🤖 MEVX", f"https://t.me/MevxTradingBot?start={contract}")],
 Button.url("🔗 GMGN", "https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC")]
 ]
 
-# ===== STATE =====
+===== STATE =====
 
 pending_input = {}
 
-# ===== FLASK LOGIN ROUTES =====
+===== FLASK LOGIN ROUTES =====
 
 LOGIN_FORM = """
 <!doctype html>
@@ -481,7 +481,7 @@ logger.error(f"❌ Login failed: {e}")
 return "<p>Invalid code or error. Try again.</p>", 400
 return render_template_string(CODE_FORM)
 
-# ===== FLASK HEALTHCHECK =====
+===== FLASK HEALTHCHECK =====
 
 @app.route('/')
 def root():
@@ -491,7 +491,7 @@ return jsonify(status="ok", message="Bot is running"), 200
 def health():
 return jsonify(status="ok"), 200
 
-# ===== TELETHON ADMIN CALLBACK HANDLER =====
+===== TELETHON ADMIN CALLBACK HANDLER =====
 
 @bot_client.on(events.CallbackQuery)
 async def admin_callback_handler(event):
@@ -584,7 +584,7 @@ await remove_channel(sid, "source")
 return await event.answer("✅ Source removed", alert=True)
 await event.answer("❓ Unknown command")
 
-# ===== TELETHON PRIVATE MESSAGE HANDLER =====
+===== TELETHON PRIVATE MESSAGE HANDLER =====
 
 @bot_client.on(events.NewMessage)
 async def admin_private_handler(event):
@@ -655,7 +655,7 @@ return await bot_client.send_message(uid, await get_admin_dashboard(), buttons=b
 elif txt.lower() in ('/start', 'start'):
 await bot_client.send_message(uid, await get_admin_dashboard(), buttons=build_admin_keyboard(), link_preview=False)
 
-# ===== TELETHON CHANNEL MESSAGE HANDLER =====
+===== TELETHON CHANNEL MESSAGE HANDLER =====
 
 @user_client.on(events.NewMessage)
 async def channel_handler(event):
@@ -796,7 +796,7 @@ Button.inline("📡 Sources", b"admin_sources")],
 [Button.inline("🎬 Update GIF", b"admin_update_gif")]
 ]
 
-# ===== MAIN ENTRY (Hypercorn + asyncio) =====
+===== MAIN ENTRY (Hypercorn + asyncio) =====
 
 async def main():
 # Initialize DB & defaults
