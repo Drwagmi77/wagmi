@@ -3,3 +3,4 @@ telethon
 psycopg2-binary
 requests
 hypercorn
+asgiref
