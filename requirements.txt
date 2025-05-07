@@ -1,6 +1,5 @@
+Flask
 telethon
-httpx[http2]
+psycopg2-binary
 requests
-loguru
-flask
-psycopg2
+hypercorn

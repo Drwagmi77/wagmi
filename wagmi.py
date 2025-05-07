@@ -12,15 +12,28 @@ from psycopg2.extras import RealDictCursor
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
-from flask import Flask, jsonify  # <-- Flask import
+from flask import Flask, jsonify, request, redirect, session, render_template_string
 
-# ===== DATABASE CONFIGURATION =====
-DB_NAME = "wagmi"
-DB_USER = "wagmi_user"
-DB_PASS = "LP68srOcSsau0NmPEmPrgSkxnuj8DF9l"
-DB_HOST = "dpg-cvrtatq4d50c73d5n5f0-a.oregon-postgres.render.com"
-DB_PORT = "5432"
+# ===== ENV / CONFIG =====
+DB_NAME    = os.environ.get("DB_NAME", "wagmi_82kq")
+DB_USER    = os.environ.get("DB_USER", "wagmi_82kq_user")
+DB_PASS    = os.environ.get("DB_PASS", "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo")
+DB_HOST    = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com")
+DB_PORT    = os.environ.get("DB_PORT", "5432")
+API_ID     = int(os.environ.get("API_ID", 28146969))
+API_HASH   = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", '7834122356:AAGszZL-bgmggu_77aH0_lszBqe-Rei25_w')
+SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
+# ===== FLASK APP & SESSION =====
+app = Flask(__name__)
+app.secret_key = SECRET_KEY
+
+# ===== TELETHON CLIENTS =====
+bot_client  = TelegramClient('lion', API_ID, API_HASH)
+user_client = TelegramClient('monkey', API_ID, API_HASH)
+
+# ===== DATABASE HELPERS (sync + async) =====
 def get_connection():
     return psycopg2.connect(
         dbname=DB_NAME,
@@ -30,13 +43,10 @@ def get_connection():
         port=DB_PORT
     )
 
-# ----- Synchronous Database Functions -----
 def init_db_sync():
-    """Create the necessary tables using psycopg2 (synchronous version)."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Table for admins
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS admins (
                     user_id BIGINT PRIMARY KEY,
@@ -46,7 +56,6 @@ def init_db_sync():
                     is_default BOOLEAN DEFAULT FALSE
                 );
             """)
-            # Table for channels
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS channels (
                     id SERIAL PRIMARY KEY,
@@ -56,7 +65,6 @@ def init_db_sync():
                     channel_type TEXT CHECK (channel_type IN ('source','target'))
                 );
             """)
-            # Table for processed messages (composite primary key)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS processed_messages (
                     chat_id BIGINT NOT NULL,
@@ -64,13 +72,11 @@ def init_db_sync():
                     PRIMARY KEY (chat_id, message_id)
                 );
             """)
-            # Table for processed contracts
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS processed_contracts (
                     contract_address TEXT PRIMARY KEY
                 );
             """)
-            # Table for token mappings (stores announcement_message_id for threaded updates)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS token_mappings (
                     token_name TEXT PRIMARY KEY,
@@ -78,7 +84,6 @@ def init_db_sync():
                     announcement_message_id BIGINT
                 );
             """)
-            # Table for bot settings
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bot_settings (
                     setting_key TEXT PRIMARY KEY,
@@ -95,7 +100,7 @@ def get_admins_sync():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM admins")
             rows = cur.fetchall()
-            return {row["user_id"]: row for row in rows}
+            return {r["user_id"]: r for r in rows}
     finally:
         conn.close()
 
@@ -106,10 +111,11 @@ def add_admin_sync(user_id, first_name, last_name="", lang="en", is_default=Fals
             cur.execute("""
                 INSERT INTO admins (user_id, first_name, last_name, lang, is_default)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (user_id) DO UPDATE SET first_name=%s, last_name=%s, lang=%s, is_default=%s;
+                ON CONFLICT (user_id) DO UPDATE
+                  SET first_name=%s, last_name=%s, lang=%s, is_default=%s;
             """, (user_id, first_name, last_name, lang, is_default,
                   first_name, last_name, lang, is_default))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -121,7 +127,7 @@ def remove_admin_sync(user_id):
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM admins WHERE user_id = %s", (user_id,))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -130,8 +136,7 @@ def get_channels_sync(channel_type):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM channels WHERE channel_type = %s", (channel_type,))
-            rows = cur.fetchall()
-            return [row for row in rows]
+            return cur.fetchall()
     finally:
         conn.close()
 
@@ -143,7 +148,7 @@ def add_channel_sync(channel_id, username, title, channel_type):
                 INSERT INTO channels (channel_id, username, title, channel_type)
                 VALUES (%s, %s, %s, %s)
             """, (channel_id, username, title, channel_type))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -151,8 +156,9 @@ def remove_channel_sync(channel_id, channel_type):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s", (channel_id, channel_type))
-            conn.commit()
+            cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s",
+                        (channel_id, channel_type))
+        conn.commit()
     finally:
         conn.close()
 
@@ -160,7 +166,8 @@ def is_message_processed_sync(chat_id, message_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM processed_messages WHERE chat_id = %s AND message_id = %s;", (chat_id, message_id))
+            cur.execute("SELECT 1 FROM processed_messages WHERE chat_id = %s AND message_id = %s",
+                        (chat_id, message_id))
             return cur.fetchone() is not None
     finally:
         conn.close()
@@ -171,10 +178,9 @@ def record_processed_message_sync(chat_id, message_id):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO processed_messages (chat_id, message_id)
-                VALUES (%s, %s)
-                ON CONFLICT DO NOTHING;
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
             """, (chat_id, message_id))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -182,7 +188,8 @@ def is_contract_processed_sync(contract_address):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM processed_contracts WHERE contract_address = %s;", (contract_address,))
+            cur.execute("SELECT 1 FROM processed_contracts WHERE contract_address = %s",
+                        (contract_address,))
             return cur.fetchone() is not None
     finally:
         conn.close()
@@ -193,10 +200,9 @@ def record_processed_contract_sync(contract_address):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO processed_contracts (contract_address)
-                VALUES (%s)
-                ON CONFLICT DO NOTHING;
+                VALUES (%s) ON CONFLICT DO NOTHING
             """, (contract_address,))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -204,7 +210,7 @@ def get_token_mapping_sync(token_name):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM token_mappings WHERE token_name = %s;", (token_name,))
+            cur.execute("SELECT * FROM token_mappings WHERE token_name = %s", (token_name,))
             row = cur.fetchone()
             return dict(row) if row else None
     finally:
@@ -218,10 +224,11 @@ def add_token_mapping_sync(token_name, contract_address, announcement_message_id
                 INSERT INTO token_mappings (token_name, contract_address, announcement_message_id)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (token_name) DO UPDATE
-                SET contract_address = %s, announcement_message_id = COALESCE(%s, token_mappings.announcement_message_id);
+                  SET contract_address = %s,
+                      announcement_message_id = COALESCE(%s, token_mappings.announcement_message_id)
             """, (token_name, contract_address, announcement_message_id,
                   contract_address, announcement_message_id))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
@@ -229,8 +236,11 @@ def update_token_announcement_sync(token_name, announcement_message_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE token_mappings SET announcement_message_id = %s WHERE token_name = %s;", (announcement_message_id, token_name))
-            conn.commit()
+            cur.execute("""
+                UPDATE token_mappings SET announcement_message_id = %s
+                WHERE token_name = %s
+            """, (announcement_message_id, token_name))
+        conn.commit()
     finally:
         conn.close()
 
@@ -238,7 +248,8 @@ def get_mapping_by_announcement_sync(announcement_message_id):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM token_mappings WHERE announcement_message_id = %s;", (announcement_message_id,))
+            cur.execute("SELECT * FROM token_mappings WHERE announcement_message_id = %s",
+                        (announcement_message_id,))
             row = cur.fetchone()
             return dict(row) if row else None
     finally:
@@ -248,11 +259,9 @@ def get_bot_setting_sync(setting):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT setting_value FROM bot_settings WHERE setting_key = %s;", (setting,))
+            cur.execute("SELECT setting_value FROM bot_settings WHERE setting_key = %s", (setting,))
             row = cur.fetchone()
-            if row:
-                return row["setting_value"]
-            return DEFAULT_BOT_SETTINGS.get(setting)
+            return row["setting_value"] if row else None
     finally:
         conn.close()
 
@@ -263,13 +272,13 @@ def set_bot_setting_sync(setting, value):
             cur.execute("""
                 INSERT INTO bot_settings (setting_key, setting_value)
                 VALUES (%s, %s)
-                ON CONFLICT (setting_key) DO UPDATE SET setting_value = %s;
+                ON CONFLICT (setting_key) DO UPDATE SET setting_value = %s
             """, (setting, value, value))
-            conn.commit()
+        conn.commit()
     finally:
         conn.close()
 
-# ----- Async Wrappers using asyncio.to_thread -----
+# Async wrappers
 async def init_db():
     await asyncio.to_thread(init_db_sync)
 
@@ -316,84 +325,62 @@ async def get_mapping_by_announcement(announcement_message_id):
     return await asyncio.to_thread(get_mapping_by_announcement_sync, announcement_message_id)
 
 async def get_bot_setting(setting):
-    return await asyncio.to_thread(get_bot_setting_sync, setting)
+    val = await asyncio.to_thread(get_bot_setting_sync, setting)
+    return val if val is not None else DEFAULT_BOT_SETTINGS.get(setting)
 
 async def set_bot_setting(setting, value):
     await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-# ===== DEFAULT VALUES & LOGGING =====
+# ===== DEFAULTS & LOGGING =====
 DEFAULT_ADMIN_ID = 6489451767
-
-# Updated Default Source Channel using gem_tools_calls
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
     "username": "@gem_tools_calls",
     "title": "💎 GemTools 💎 Calls",
     "channel_type": "source"
 }
-
-# Updated Default Target Channel using Wagmi Vip
 DEFAULT_TARGET_CHANNEL = {
     "channel_id": -1002405509240,
-    "username": None,  # No username provided
+    "username": "",
     "title": "Wagmi Vip ☢️",
     "channel_type": "target"
 }
-
 DEFAULT_BOT_SETTINGS = {
     "bot_status": "running",
-    "custom_gif": "https://dl.dropboxusercontent.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6s"
+    "custom_gif": "https://dl.dropbox.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8kdpwwm3je6hjcqgd89s&st=vxjkqe6c?dl=1"
 }
 
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
-log_file = os.path.join(LOG_DIR, "bot_logs.log")
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler(log_file, mode='a'), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler("logs/bot_logs.log", mode='a'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 logger.info("🔥 Logging setup complete. Bot is starting...")
 
-# ===== TELEGRAM CONFIGURATION =====
-# Using 'monkey' as user session and 'lion' as bot session
-api_id = 28885685
-api_hash = 'c24e850a947c003557f614d6b34035d9'
-bot_token = '7886946660:AAGXvcV7FS5uFduFUVGGzwwWg1kfua_Pzco'
-user_session = 'monkey'
-bot_session = 'lion'
-
-bot_client = TelegramClient(bot_session, api_id, api_hash)
-user_client = TelegramClient(user_session, api_id, api_hash)
-
-# ===== HELPER FUNCTIONS FOR TOKEN EXTRACTION AND TEMPLATES =====
+# ===== HELPER FUNCTIONS =====
 def extract_contract(text: str) -> str | None:
     m = re.findall(r"\b[A-Za-z0-9]{32,50}\b", text)
     return m[0] if m else None
 
-# Revised token extraction with logging
 def extract_token_name_from_source(text: str) -> str:
-    """
-    Iterates over all lines in the source message and returns the first occurrence
-    of a token name defined as a word immediately following '$'. If no token is found, returns "unknown".
-    """
     lines = text.strip().splitlines()
     if not lines:
         logger.info("Empty message received; returning 'unknown'.")
         return "unknown"
-
     for line in lines:
         match = re.search(r"\$([A-Za-z0-9_]+)", line)
         if match:
             token = match.group(1)
             logger.info(f"Token extracted: '{token}' from line: '{line}'")
             return token
-
     logger.info("No valid token found in the message; returning 'unknown'.")
     return "unknown"
 
-# Parse TFF output for market cap, liquidity, and mint status.
 def parse_tff_output(text: str) -> dict:
     data = {}
     data["mint_status"]      = (re.search(r"🌿\s*Mint:\s*(\w+)", text) or [None, "N/A"])[1]
@@ -428,73 +415,124 @@ def build_announcement_buttons(contract):
         [Button.url("🐉 Soul", f"https://t.me/soul_sniper_bot?start=4U4QhnwlCBxS_{contract}"),
          Button.url("🤖 MEVX", f"https://t.me/MevxTradingBot?start={contract}")],
         [Button.url("📊 Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}")],
-        [Button.url("🚀 Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
+        [Button.url("🚀 Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
          Button.url("🔗 GMGN", "https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC")]
     ]
 
-# Correct last announcement mapping function.
-async def correct_last_announcement():
-    targets = await get_channels('target')
-    if not targets:
-        return
-
-    for ch in targets:
-        last_msgs = await user_client.get_messages(ch["channel_id"], limit=1)
-        if not last_msgs:
-            continue
-        last_msg = last_msgs[0]
-        text = last_msg.message or ""
-        if not text:
-            continue
-
-        # Extract token name from the announcement message (if applicable)
-        extracted_token = extract_token_name_from_source(text)
-        mapping = await get_mapping_by_announcement(last_msg.id)
-        if mapping:
-            old_token = mapping["token_name"]
-            if extracted_token and extracted_token != old_token:
-                await add_token_mapping(extracted_token.lower(), mapping["contract_address"], last_msg.id)
-                logger.info(
-                    "Corrected token mapping for message id %s: '%s' -> '%s'",
-                    last_msg.id, old_token, extracted_token
-                )
-        else:
-            logger.info("No mapping found for announcement message id %s", last_msg.id)
-
-# ===== ADMIN DASHBOARD & KEYBOARD =====
-async def get_admin_dashboard():
-    try:
-        aff = requests.get("https://www.affirmations.dev").json().get('affirmation', '')
-    except:
-        aff = ""
-    try:
-        q = requests.get("https://zenquotes.io/api/random").json()[0]
-        mot = f"{q['q']} — {q['a']}"
-    except:
-        mot = ""
-    bot_status = (await get_bot_setting("bot_status")) or "running"
-    return (
-        "👋 *Hey Boss!* 👋\n\n"
-        f"🤖 *Bot Status:* `{bot_status.capitalize()}`\n\n"
-        f"💖 *Affirmation:* {aff}\n"
-        f"🚀 *Motivation:* {mot}\n\n"
-        "What would you like to do?"
-    )
-
-def build_admin_keyboard():
-    return [
-        [Button.inline("▶️ Start Bot", b"admin_start"),
-         Button.inline("⏸️ Pause Bot", b"admin_pause"),
-         Button.inline("🛑 Stop Bot", b"admin_stop")],
-        [Button.inline("👤 Admins", b"admin_admins"),
-         Button.inline("📺 Targets", b"admin_targets"),
-         Button.inline("📡 Sources", b"admin_sources")],
-        [Button.inline("🎬 Update GIF", b"admin_update_gif")]
-    ]
-
+# ===== STATE =====
 pending_input = {}
 
-# ===== CALLBACK HANDLER =====
+# ===== FLASK LOGIN ROUTES (UPDATED) =====
+LOGIN_FORM = """
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Login to Telegram</title>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f3f3f3;
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      padding: 24px;
+      text-align: center;
+      width: 300px;
+    }
+    .login-card h2 {
+      margin-bottom: 16px;
+      color: #2c3e50;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h2>Log in with Telegram</h2>
+    <script async
+      src="https://telegram.org/js/telegram-widget.js?7"
+      data-telegram-login="Drwagmibot"
+      data-size="large"
+      data-userpic="true"
+      data-radius="8"
+      data-auth-url="https://wagmi-m6ie.onrender.com"
+      data-request-access="write">
+    </script>
+  </div>
+</body>
+</html>
+"""
+
+CODE_FORM = """
+<!doctype html>
+<title>Enter the Code</title>
+<h2>Step 2: Enter the code you received</h2>
+<form method="post">
+  <input name="code" placeholder="12345" required>
+  <button type="submit">Verify</button>
+</form>
+"""
+
+@app.route('/login', methods=['GET', 'POST'])
+async def login():
+    if request.method == 'POST':
+        phone = request.form['phone'].strip()
+        session['phone'] = phone
+        try:
+            await user_client.connect()
+            await user_client.send_code_request(phone)
+            logger.info(f"➡️ Sent login code to {phone}")
+            return redirect('/submit-code')
+        except Exception as e:
+            logger.error(f"❌ Error sending login code: {e}")
+            return "<p>Error sending code. Check logs.</p>", 500
+    return render_template_string(LOGIN_FORM)
+
+@app.route('/submit-code', methods=['GET', 'POST'])
+async def submit_code():
+    if 'phone' not in session:
+        return redirect('/login')
+    if request.method == 'POST':
+        code = request.form['code'].strip()
+        phone = session['phone']
+        try:
+            await user_client.sign_in(phone, code)
+            logger.info(f"✅ Logged in user-client for {phone}")
+            return "<p>Login successful! You can close this tab.</p>"
+        except Exception as e:
+            logger.error(f"❌ Login failed: {e}")
+            return "<p>Invalid code or error. Try again.</p>", 400
+    return render_template_string(CODE_FORM)
+
+@app.route('/auth', methods=['GET'])
+def auth():
+    auth_data = request.args.to_dict()
+    # TODO: verify auth_data hash per Telegram docs:
+    # https://core.telegram.org/widgets/login#checking-authorization
+    session['user'] = {
+      'id': auth_data.get('id'),
+      'first_name': auth_data.get('first_name'),
+      'username': auth_data.get('username')
+    }
+    return redirect('/')
+
+# ===== FLASK HEALTHCHECK =====
+@app.route('/')
+def root():
+    return jsonify(status="ok", message="Bot is running"), 200
+
+@app.route('/health')
+def health():
+    return jsonify(status="ok"), 200
+
+# ===== TELETHON ADMIN CALLBACK HANDLER =====
 @bot_client.on(events.CallbackQuery)
 async def admin_callback_handler(event):
     uid = event.sender_id
@@ -509,8 +547,8 @@ async def admin_callback_handler(event):
         await event.answer('▶️ Bot started')
         return await event.edit(await get_admin_dashboard(), buttons=build_admin_keyboard())
     if data == 'admin_pause':
-        kb = [[Button.inline("🔙 Back", b"admin_home")]]
         pending_input[uid] = {'action': 'pause'}
+        kb = [[Button.inline("🔙 Back", b"admin_home")]]
         return await event.edit("⏸ *Pause Bot*\n\nHow many minutes should I pause for?", buttons=kb)
     if data == 'admin_stop':
         await set_bot_setting("bot_status", "stopped")
@@ -531,10 +569,10 @@ async def admin_callback_handler(event):
         kb = []
         for aid, info in admins.items():
             if aid == DEFAULT_ADMIN_ID or info.get("is_default"):
-                kb.append([Button.inline(f"{info['first_name']} ({aid})", "noop")])
+                kb.append([Button.inline(f"{info['first_name']} ({aid})", b"noop")])
             else:
                 kb.append([
-                    Button.inline(f"{info['first_name']} ({aid})", "noop"),
+                    Button.inline(f"{info['first_name']} ({aid})", b"noop"),
                     Button.inline("❌ Remove", f"remove_admin:{aid}")
                 ])
         kb.append([Button.inline("🔙 Back", b"admin_admins")])
@@ -551,7 +589,7 @@ async def admin_callback_handler(event):
         return await event.edit("➕ *Add Target*\n\nSend me the channel ID to add:", buttons=[[Button.inline("🔙 Back", b"admin_targets")]])
     if data == 'admin_remove_target':
         targets = await get_channels('target')
-        kb = [*[Button.inline(ch['title'], "noop") + [Button.inline("❌ Remove", f"remove_target:{ch['channel_id']}")] for ch in targets],
+        kb = [*[Button.inline(ch['title'], b"noop") + [Button.inline("❌ Remove", f"remove_target:{ch['channel_id']}")] for ch in targets],
               [Button.inline("🔙 Back", b"admin_targets")]]
         return await event.edit("🗑️ *Remove Target*", buttons=kb)
     if data == 'admin_sources':
@@ -566,7 +604,7 @@ async def admin_callback_handler(event):
         return await event.edit("➕ *Add Source*\n\nSend me the channel ID to add:", buttons=[[Button.inline("🔙 Back", b"admin_sources")]])
     if data == 'admin_remove_source':
         sources = await get_channels('source')
-        kb = [*[Button.inline(ch['title'], "noop") + [Button.inline("❌ Remove", f"remove_source:{ch['channel_id']}")] for ch in sources],
+        kb = [*[Button.inline(ch['title'], b"noop") + [Button.inline("❌ Remove", f"remove_source:{ch['channel_id']}")] for ch in sources],
               [Button.inline("🔙 Back", b"admin_sources")]]
         return await event.edit("🗑️ *Remove Source*", buttons=kb)
     if data == 'admin_update_gif':
@@ -586,7 +624,7 @@ async def admin_callback_handler(event):
         return await event.answer("✅ Source removed", alert=True)
     await event.answer("❓ Unknown command")
 
-# ===== PRIVATE MESSAGE HANDLER =====
+# ===== TELETHON PRIVATE MESSAGE HANDLER =====
 @bot_client.on(events.NewMessage)
 async def admin_private_handler(event):
     if not event.is_private:
@@ -636,8 +674,9 @@ async def admin_private_handler(event):
             try:
                 me = await user_client.get_me()
                 await user_client(GetParticipantRequest(channel=cid, participant=me.id))
-            except:
-                return await bot_client.send_message(uid, "❌ Your account is not in that source.")
+            except Exception as e:
+                logger.error(f"Error checking source channel participation for {cid}: {e}")
+                return await bot_client.send_message(uid, "❌ Your user account is not in that source channel or it's not accessible.")
             await add_channel(cid, f"#{cid}", f"Channel {cid}", "source")
             await bot_client.send_message(uid, f"✅ Source {cid} added.")
             return await bot_client.send_message(uid, await get_admin_dashboard(), buttons=build_admin_keyboard())
@@ -655,7 +694,7 @@ async def admin_private_handler(event):
     elif txt.lower() in ('/start', 'start'):
         await bot_client.send_message(uid, await get_admin_dashboard(), buttons=build_admin_keyboard(), link_preview=False)
 
-# ===== CHANNEL MESSAGE HANDLER =====
+# ===== TELETHON CHANNEL MESSAGE HANDLER =====
 @user_client.on(events.NewMessage)
 async def channel_handler(event):
     if await is_message_processed(event.chat_id, event.id):
@@ -663,9 +702,8 @@ async def channel_handler(event):
     await record_processed_message(event.chat_id, event.id)
     if (await get_bot_setting('bot_status')) != 'running':
         return
-    # Process only if the source channel matches the default source channel
-    src_channels = await get_channels('source')
-    src_ids = [ch['channel_id'] for ch in src_channels]
+
+    src_ids = [c['channel_id'] for c in await get_channels('source')]
     if event.chat_id not in src_ids:
         return
 
@@ -673,27 +711,24 @@ async def channel_handler(event):
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     logger.info(f"📥 Received at {now}: {txt}")
 
-    # ----- UPDATE MESSAGE BRANCH -----
     upd = re.compile(r"MC:\s*\$?[\d\.Kk]+\s*(->|[-–>→])\s*\$?[\d\.Kk]+", re.IGNORECASE)
     if upd.search(txt):
         token_sym = extract_token_name_from_source(txt)
         mapping = await get_token_mapping(token_sym.lower())
-        c = mapping["contract_address"] if mapping and mapping.get("contract_address") else "unknown_contract"
+        c = mapping["contract_address"] if mapping else "unknown_contract"
         prof = (re.search(r"(\d+)%", txt) or [None, "0"])[1] + "%"
-        new_mc = (re.search(r"MC:\s*\$?([\d\.Kk]+)\s*(->|[-–>→])\s*\$?([\d\.Kk]+)", txt) or [None, None, None, "N/A"])[3]
+        new_mc = (re.search(r"MC:\s*\$?[\d\.Kk]+\s*(->|[-–>→])\s*\$?[\d\.Kk]+", txt) or [None, None, None, "N/A"])[3]
         upd_text = build_update_template(token_sym, new_mc, prof)
         gif_url = await get_bot_setting('custom_gif')
-        # POST STRICTLY in the default target channel only!
         await bot_client.send_file(
             DEFAULT_TARGET_CHANNEL["channel_id"],
             file=gif_url,
             caption=upd_text,
-            reply_to=mapping["announcement_message_id"] if mapping and mapping.get("announcement_message_id") else None,
+            reply_to=mapping.get("announcement_message_id") if mapping else None,
             buttons=[[Button.url("🔗 Don't Miss Out", f"https://t.me/solana_trojanbot?start=r-ttf-{c}")]]
         )
         return
 
-    # ----- NEW CONTRACT BRANCH -----
     contract = extract_contract(txt)
     if not contract or await is_contract_processed(contract):
         return
@@ -701,6 +736,12 @@ async def channel_handler(event):
 
     logger.info(f"➡️ Sending to TTF bot at {now}: {contract}")
     try:
+        if not user_client.is_connected():
+            await user_client.connect()
+        if not await user_client.is_user_authorized():
+            logger.warning("⚠️ User client not authorized. TTF bot interaction skipped.")
+            return
+
         async with user_client.conversation('@ttfbotbot', timeout=90) as conv:
             await conv.send_message(contract)
             ev = await conv.get_response()
@@ -710,12 +751,9 @@ async def channel_handler(event):
 
     logger.info(f"⬅️ Received from TTF bot at {now}: {ev.raw_text}")
     data = parse_tff_output(ev.raw_text)
-    # Extract token name from the source message.
     token_name = extract_token_name_from_source(txt)
-    # Build announcement template using extracted token name
     new_text = build_new_template(token_name, contract, data['market_cap'], data['liquidity_status'], data['mint_status'])
     buttons = build_announcement_buttons(contract)
-    # POST NEW ANNOUNCEMENT STRICTLY to the default target channel
     msg = await bot_client.send_file(
         DEFAULT_TARGET_CHANNEL["channel_id"],
         file=(await get_bot_setting('custom_gif')),
@@ -731,10 +769,32 @@ async def resume_after(minutes: int, admin_id: int):
         await set_bot_setting('bot_status', 'running')
         await bot_client.send_message(admin_id, "▶️ Resumed after pause.")
 
+async def correct_last_announcement():
+    targets = await get_channels('target')
+    if not targets:
+        return
+    for ch in targets:
+        last_msgs = await user_client.get_messages(ch["channel_id"], limit=1)
+        if not last_msgs:
+            continue
+        last_msg = last_msgs[0]
+        text = last_msg.message or ""
+        if not text:
+            continue
+        extracted_token = extract_token_name_from_source(text)
+        mapping = await get_mapping_by_announcement(last_msg.id)
+        if mapping:
+            old_token = mapping["token_name"]
+            if extracted_token and extracted_token != old_token:
+                await add_token_mapping(extracted_token.lower(), mapping["contract_address"], last_msg.id)
+                logger.info("Corrected token mapping for message id %s: '%s' -> '%s'",
+                            last_msg.id, old_token, extracted_token)
+        else:
+            logger.info("No mapping found for announcement message id %s", last_msg.id)
+
 async def check_bot_admin() -> bool:
     try:
         me = await bot_client.get_me()
-        # Check admin rights in the default target channel
         part = await bot_client(GetParticipantRequest(
             channel=DEFAULT_TARGET_CHANNEL["channel_id"],
             participant=me
@@ -744,80 +804,104 @@ async def check_bot_admin() -> bool:
         logger.error("Admin check error: %s", e)
         return False
 
-# ===== FLASK HEALTHCHECK ENDPOINT =====
-# We add a simple Flask app that provides a health-check endpoint.
-app = Flask(__name__)
+async def get_admin_dashboard():
+    try:
+        aff = requests.get("https://www.affirmations.dev").json().get('affirmation', '')
+    except:
+        aff = ""
+    try:
+        q = requests.get("https://zenquotes.io/api/random").json()[0]
+        mot = f"{q['q']} — {q['a']}"
+    except:
+        mot = ""
+    bot_status = (await get_bot_setting("bot_status")) or "running"
+    return (
+        "👋 *Hey Boss!* 👋\n\n"
+        f"🤖 *Bot Status:* `{bot_status.capitalize()}`\n\n"
+        f"💖 *Affirmation:* {aff}\n"
+        f"🚀 *Motivation:* {mot}\n\n"
+        "What would you like to do?"
+    )
 
-@app.route('/')
-def root():
-    return jsonify(status="ok", message="Bot is running"), 200
+def build_admin_keyboard():
+    return [
+        [Button.inline("▶️ Start Bot", b"admin_start"),
+         Button.inline("⏸️ Pause Bot", b"admin_pause"),
+         Button.inline("🛑 Stop Bot", b"admin_stop")],
+        [Button.inline("👤 Admins", b"admin_admins"),
+         Button.inline("📺 Targets", b"admin_targets"),
+         Button.inline("📡 Sources", b"admin_sources")],
+        [Button.inline("🎬 Update GIF", b"admin_update_gif")]
+    ]
 
-@app.route('/health')
-def health():
-    return jsonify(status="ok"), 200
-
-def start_self_ping():
-    def ping_health():
-        try:
-            requests.get(f"http://localhost:{os.environ.get('PORT', '5000')}/health")
-            logger.info("✅ Self-ping successful")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Self-ping failed: {e}")
-        threading.Timer(4 * 60, ping_health).start()  # Ping every 4 minutes
-
-# ===== MAIN =====
+# ===== MAIN ENTRY (Hypercorn + asyncio) =====
 async def main():
-    # 1) Initialize the database and seed defaults
+    # Initialize DB & defaults
     await init_db()
     admins = await get_admins()
     if DEFAULT_ADMIN_ID not in admins:
         await add_admin(DEFAULT_ADMIN_ID, 'Default', is_default=True)
 
-    # Seed default source channel if not already present
-    source_channels = await get_channels('source')
-    if not any(c['channel_id'] == DEFAULT_SOURCE_CHANNEL['channel_id'] for c in source_channels):
+    src_ch = await get_channels('source')
+    if not any(c['channel_id']==DEFAULT_SOURCE_CHANNEL['channel_id'] for c in src_ch):
         await add_channel(**DEFAULT_SOURCE_CHANNEL)
-        logger.info("✅ Default source channel seeded.")
+    tgt_ch = await get_channels('target')
+    if not any(c['channel_id']==DEFAULT_TARGET_CHANNEL['channel_id'] for c in tgt_ch):
+        await add_channel(**DEFAULT_TARGET_CHANNEL)
 
-    # Seed default target channel if not already present
-    target_channels = await get_channels('target')
-    if not any(c['channel_id'] == DEFAULT_TARGET_CHANNEL['channel_id'] for c in target_channels):
-        tgt = DEFAULT_TARGET_CHANNEL.copy()
-        tgt['username'] = tgt['username'] or ''
-        await add_channel(**tgt)
-        logger.info("✅ Default target channel seeded.")
+    for k,v in DEFAULT_BOT_SETTINGS.items():
+        if await get_bot_setting(k) is None:
+            await set_bot_setting(k, v)
 
-    for key, value in DEFAULT_BOT_SETTINGS.items():
-        current_val = await get_bot_setting(key)
-        if current_val is None:
-            await set_bot_setting(key, value)
+    # Start bot client
+    await bot_client.start(bot_token=BOT_TOKEN)
+    logger.info("🤖 Bot client started.")
 
-    # 2) Start both Telegram clients so they're connected
-    await user_client.start()
-    await bot_client.start(bot_token=bot_token)
+    await user_client.connect()
+    if await user_client.is_user_authorized():
+        await correct_last_announcement()
+    else:
+        logger.info("👤 User client not yet authorized; please /login via web.")
 
-    # 3) Now that we're connected, correct the last announcement
-    await correct_last_announcement()
-
-    # 4) Verify bot has admin rights in the target channel
     if not await check_bot_admin():
-        logger.error("Bot lacks admin rights in the target channel; exiting.")
-        return
+        logger.error("❌ Bot lacks admin rights in target channel.")
 
-    logger.info("🚀 Bot is running.")
-
-    # 5) Start self-pinging
-    start_self_ping()
-
-    # 6) Run until disconnected
-    await user_client.run_until_disconnected()
+    await asyncio.Event().wait()
 
 if __name__ == '__main__':
-    # Start Flask in a daemon thread so Render detects the webservice.
-    port = int(os.environ.get('PORT', 5000))
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True)
-    flask_thread.start()
+    from hypercorn.asyncio import serve
+    from hypercorn.config     import Config
+    from asgiref.wsgi         import WsgiToAsgi
 
-    # Run the Telegram bot's async main
-    asyncio.run(main())
+    asgi_app = WsgiToAsgi(app)
+    config   = Config()
+    config.bind     = [f"0.0.0.0:{os.environ.get('PORT','5000')}"]
+    config.accesslog = '-'
+    config.errorlog  = '-'
+
+    def start_self_ping():
+        def ping():
+            try:
+                port = os.environ.get('PORT','5000')
+                requests.get(f"http://localhost:{port}/health")
+                logger.info("✅ Self-ping OK")
+            except Exception as e:
+                logger.error(f"❌ Self-ping failed: {e}")
+            threading.Timer(4*60, ping).start()
+        ping()
+
+    def delayed_self_ping():
+        time.sleep(5)
+        start_self_ping()
+
+    threading.Thread(target=delayed_self_ping, daemon=True).start()
+    logger.info(f"Starting Hypercorn on {config.bind[0]}")
+
+    async def runner():
+        await asyncio.gather(
+            serve(asgi_app, config),
+            main()
+        )
+
+    asyncio.run(runner())
 
