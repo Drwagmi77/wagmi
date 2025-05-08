@@ -211,3 +211,14 @@ https://t.me/BullxNeoBot?start=access_0CQBZZ8TG1DC
 2025-05-06 15:26:31,737 - INFO - Disconnecting from 149.154.167.91:443/TcpFull...
 2025-05-06 15:26:31,750 - INFO - Disconnection from 149.154.167.91:443/TcpFull complete!
 2025-05-06 15:26:31,888 - INFO - Not disconnecting (already have no connection)
+2025-05-07 21:18:05,511 - INFO - 🔥 Logging setup complete. Bot is starting...
+2025-05-07 21:18:06,350 - INFO - Starting Hypercorn on 0.0.0.0:5000
+2025-05-07 21:18:06,358 - WARNING - ASGI Framework Lifespan error, continuing without Lifespan support
+2025-05-07 21:18:11,393 - INFO - ✅ Self-ping OK
+2025-05-07 21:24:07,691 - INFO - 🔥 Logging setup complete. Bot is starting...
+2025-05-07 21:24:08,090 - INFO - Starting Hypercorn on 0.0.0.0:5000
+2025-05-07 21:24:08,097 - WARNING - ASGI Framework Lifespan error, continuing without Lifespan support
+2025-05-07 21:24:13,123 - INFO - ✅ Self-ping OK
+2025-05-07 21:27:25,942 - INFO - 🔥 Logging setup complete. Bot is starting...
+2025-05-07 21:27:26,475 - INFO - Starting Hypercorn on 0.0.0.0:5000
+2025-05-07 21:27:26,483 - WARNING - ASGI Framework Lifespan error, continuing without Lifespan support
