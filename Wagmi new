@@ -1,0 +1,215 @@
+import re
+import asyncio
+import logging
+import os
+import threading
+import time
+from datetime import datetime
+
+import random
+import requests
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from telethon import TelegramClient, events, Button
+from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
+from telethon.tl.functions.channels import GetParticipantRequest
+from flask import Flask, jsonify, request, redirect, session, render_template_string
+
+# Database configuration with environment variables
+DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq")
+DB_USER = os.environ.get("DB_USER", "wagmi_82kq_user")
+DB_PASS = os.environ.get("DB_PASS", "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo")
+DB_HOST = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+API_ID = int(os.environ.get("API_ID", 28146969))
+API_HASH = os.environ.get("API_HASH", "5c8acdf2a7358589696af178e2319443")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "7834122356:AAGszZL-bgmggu_77aH0_lszBqe-Rei25_w")
+SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
+
+# Flask application setup
+app = Flask(__name__)
+app.secret_key = SECRET_KEY
+
+# Telethon clients with StringSession
+from telethon.sessions import StringSession
+bot_client = TelegramClient(StringSession(), API_ID, API_HASH)
+user_client = TelegramClient(StringSession(), API_ID, API_HASH)
+
+# Database connection function
+def get_connection():
+    try:
+        return psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+    except psycopg2.OperationalError as e:
+        logger.error(f"Database connection failed: {e}")
+        raise e
+
+# Initialize database tables
+def init_db_sync():
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id BIGINT PRIMARY KEY,
+                    first_name TEXT NOT NULL,
+                    last_name TEXT,
+                    lang TEXT,
+                    is_default BOOLEAN DEFAULT FALSE
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS channels (
+                    id SERIAL PRIMARY KEY,
+                    channel_id BIGINT NOT NULL UNIQUE,
+                    username TEXT,
+                    title TEXT,
+                    channel_type TEXT CHECK (channel_type IN ('source', 'target'))
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS processed_messages (
+                    chat_id BIGINT NOT NULL,
+                    message_id BIGINT NOT NULL,
+                    PRIMARY KEY (chat_id, message_id)
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS processed_contracts (
+                    contract_address TEXT PRIMARY KEY
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS token_mappings (
+                    token_name TEXT PRIMARY KEY,
+                    contract_address TEXT NOT NULL,
+                    announcement_message_id BIGINT
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value TEXT
+                );
+            """)
+        conn.commit()
+        logger.info("Database initialized or already exists.")
+    except Exception as e:
+        logger.error(f"Error during database initialization: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Get admins from database
+def get_admins_sync():
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM admins")
+            rows = cur.fetchall()
+            return {r["user_id"]: r for r in rows}
+    except Exception as e:
+        logger.error(f"Error getting admins: {e}")
+        return {}
+    finally:
+        if conn:
+            conn.close()
+
+# Add or update admin
+def add_admin_sync(user_id, first_name, last_name="", lang="en", is_default=False):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO admins (user_id, first_name, last_name, lang, is_default)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE
+                  SET first_name=%s, last_name=%s, lang=%s, is_default=%s;
+            """, (user_id, first_name, last_name, lang, is_default,
+                  first_name, last_name, lang, is_default))
+        conn.commit()
+        logger.info(f"Admin {user_id} added/updated.")
+    except Exception as e:
+        logger.error(f"Error adding admin {user_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+# Remove admin
+def remove_admin_sync(user_id):
+    admins = get_admins_sync()
+    if admins.get(user_id, {}).get("is_default"):
+        logger.warning(f"Attempted to remove default admin {user_id}.")
+        return
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM admins WHERE user_id = %s", (user_id,))
+        conn.commit()
+        logger.info(f"Admin {user_id} removed.")
+    except Exception as e:
+        logger.error(f"Error removing admin {user_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+# Get channels by type
+def get_channels_sync(channel_type):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM channels WHERE channel_type = %s", (channel_type,))
+            return cur.fetchall()
+    except Exception as e:
+        logger.error(f"Error getting {channel_type} channels: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+# Add channel
+def add_channel_sync(channel_id, username, title, channel_type):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO channels (channel_id, username, title, channel_type)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (channel_id) DO NOTHING;
+            """, (channel_id, username, title, channel_type))
+        conn.commit()
+        if cur.rowcount > 0:
+            logger.info(f"{channel_type.capitalize()} channel {channel_id} ('{title}') added.")
+        else:
+            logger.info(f"{channel_type.capitalize()} channel {channel_id} already exists.")
+    except Exception as e:
+        logger.error(f"Error adding {channel_type} channel {channel_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+# Remove channel
+def remove_channel_sync(channel_id, channel_type):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s",
+                        (channel_id, channel_type))
+        conn.commit()
+        if cur.rowcount > 0:
+            logger.info(f"{channel_type.capitalize()} channel {channel_id} removed.")
+        else:
+            logger.warning(f"No {channel
