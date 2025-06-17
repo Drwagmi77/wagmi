@@ -29,8 +29,8 @@ SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-bot_client  = TelegramClient('lion', API_ID, API_HASH)
-user_client = TelegramClient('monkey', API_ID, API_HASH)
+bot_client  = TelegramClient('lion_new_20250617', API_ID, API_HASH)
+user_client = TelegramClient('monkey_new_20250617', API_ID, API_HASH)
 
 def get_connection():
     try:
