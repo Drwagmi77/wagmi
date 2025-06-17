@@ -29,9 +29,9 @@ SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-bot_client  = TelegramClient(os.environ.get('TELETHON_SESSION', 'bot_session'), API_ID, API_HASH)
-user_client = TelegramClient(os.environ.get('TELETHON_SESSION', 'user_session'), API_ID, API_HASH)
-
+from telethon.sessions import StringSession
+bot_client  = TelegramClient(StringSession(), API_ID, API_HASH)
+user_client = TelegramClient(StringSession(), API_ID, API_HASH)
 def get_connection():
     try:
         return psycopg2.connect(
