@@ -32,6 +32,7 @@ app.secret_key = SECRET_KEY
 from telethon.sessions import StringSession
 bot_client  = TelegramClient(StringSession(), API_ID, API_HASH)
 user_client = TelegramClient(StringSession(), API_ID, API_HASH)
+
 def get_connection():
     try:
         return psycopg2.connect(
@@ -102,7 +103,6 @@ def init_db_sync():
         if conn:
             conn.close()
 
-
 def get_admins_sync():
     conn = None
     try:
@@ -138,7 +138,6 @@ def add_admin_sync(user_id, first_name, last_name="", lang="en", is_default=Fals
         if conn:
             conn.close()
 
-
 def remove_admin_sync(user_id):
     admins = get_admins_sync()
     if admins.get(user_id, {}).get("is_default"):
@@ -157,7 +156,6 @@ def remove_admin_sync(user_id):
         if conn:
             conn.close()
 
-
 def get_channels_sync(channel_type):
     conn = None
     try:
@@ -171,7 +169,6 @@ def get_channels_sync(channel_type):
     finally:
         if conn:
             conn.close()
-
 
 def add_channel_sync(channel_id, username, title, channel_type):
     conn = None
@@ -194,7 +191,6 @@ def add_channel_sync(channel_id, username, title, channel_type):
         if conn:
             conn.close()
 
-
 def remove_channel_sync(channel_id, channel_type):
     conn = None
     try:
@@ -213,7 +209,6 @@ def remove_channel_sync(channel_id, channel_type):
         if conn:
             conn.close()
 
-
 def is_message_processed_sync(chat_id, message_id):
     conn = None
     try:
@@ -228,7 +223,6 @@ def is_message_processed_sync(chat_id, message_id):
     finally:
         if conn:
             conn.close()
-
 
 def record_processed_message_sync(chat_id, message_id):
     conn = None
@@ -248,7 +242,6 @@ def record_processed_message_sync(chat_id, message_id):
         if conn:
             conn.close()
 
-
 def is_contract_processed_sync(contract_address):
     conn = None
     try:
@@ -263,7 +256,6 @@ def is_contract_processed_sync(contract_address):
     finally:
         if conn:
             conn.close()
-
 
 def record_processed_contract_sync(contract_address):
     conn = None
@@ -283,7 +275,6 @@ def record_processed_contract_sync(contract_address):
         if conn:
             conn.close()
 
-
 def get_token_mapping_sync(token_name):
     conn = None
     try:
@@ -298,7 +289,6 @@ def get_token_mapping_sync(token_name):
     finally:
         if conn:
             conn.close()
-
 
 def add_token_mapping_sync(token_name, contract_address, announcement_message_id=None):
     conn = None
@@ -322,7 +312,6 @@ def add_token_mapping_sync(token_name, contract_address, announcement_message_id
         if conn:
             conn.close()
 
-
 def update_token_announcement_sync(token_name, announcement_message_id):
     conn = None
     try:
@@ -343,7 +332,6 @@ def update_token_announcement_sync(token_name, announcement_message_id):
         if conn:
             conn.close()
 
-
 def get_mapping_by_announcement_sync(announcement_message_id):
     conn = None
     try:
@@ -360,7 +348,6 @@ def get_mapping_by_announcement_sync(announcement_message_id):
         if conn:
             conn.close()
 
-
 def get_bot_setting_sync(setting):
     conn = None
     try:
@@ -375,7 +362,6 @@ def get_bot_setting_sync(setting):
     finally:
         if conn:
             conn.close()
-
 
 def set_bot_setting_sync(setting, value):
     conn = None
@@ -395,7 +381,6 @@ def set_bot_setting_sync(setting, value):
     finally:
         if conn:
             conn.close()
-
 
 async def init_db():
     await asyncio.to_thread(init_db_sync)
@@ -449,7 +434,6 @@ async def get_bot_setting(setting):
 async def set_bot_setting(setting, value):
     await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-
 DEFAULT_ADMIN_ID = 6489451767
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
@@ -484,17 +468,14 @@ async def retry_telethon_call(coro, max_retries=5, base_delay=1.0):
     for i in range(max_retries):
         try:
             return await coro
-        except sqlite3.OperationalError as e:
-            logger.warning(f"Retry attempt {i+1}/{max_retries} for Telethon call due to database locked: {e}")
+        except Exception as e:
+            logger.warning(f"Retry attempt {i+1}/{max_retries} for Telethon call due to error: {e}")
             if i < max_retries - 1:
                 delay = base_delay * (2 ** i) + random.uniform(0, 1)
                 await asyncio.sleep(delay)
             else:
                 logger.error(f"Max retries reached for Telethon call: {e}")
                 raise
-        except Exception as e:
-             logger.error(f"Non-retryable error during Telethon call: {e}")
-             raise
     raise RuntimeError("Retry logic failed or max_retries was 0")
 
 def extract_contract(text: str) -> str | None:
@@ -728,7 +709,6 @@ async def admin_callback_handler(event):
             else:
                  return await event.edit("🗑️ *Select Target Channel to Remove*", buttons=kb, link_preview=False)
 
-
         if data == 'admin_sources':
             kb = [
                 [Button.inline("➕ Add Source", b"admin_add_source")],
@@ -779,7 +759,6 @@ async def admin_callback_handler(event):
               pass
 
     await event.answer("✅ Done" if not event.answered else "")
-
 
 @bot_client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def admin_private_handler(event):
@@ -901,7 +880,6 @@ async def admin_private_handler(event):
                     pending_input[uid] = {'action': 'confirm_add_source'}
                     return
 
-
             if act == 'confirm_update_gif':
                 link = txt.strip()
                 if not link.startswith(('http://', 'https://')):
@@ -918,7 +896,6 @@ async def admin_private_handler(event):
                 elif "?dl=1" not in link and "?" in link:
                      link = link.replace("?", "?dl=1&")
 
-
                 await set_bot_setting("custom_gif", link)
                 await event.reply("✅ GIF URL updated.")
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(), buttons=build_admin_keyboard(), link_preview=False))
@@ -932,7 +909,6 @@ async def admin_private_handler(event):
                  await retry_telethon_call(bot_client.send_message(uid, "⚠️ An error occurred. Returning to dashboard.", buttons=build_admin_keyboard(), link_preview=False))
             except Exception:
                  pass
-
 
     elif txt.lower() in ('/start', 'start'):
         await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(), buttons=build_admin_keyboard(), link_preview=False))
@@ -959,7 +935,6 @@ async def channel_handler(event):
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     logger.info(f"📥 Processing message {message_id} at {now} from chat {chat_id}: {txt[:100]}...")
 
-
     update_pattern_check = re.compile(r"MC:\s*\$?[\d\.,KkMmBb]+\s*(?:->|[-–>→])\s*\$?([\d\.,KkMmBb]+)", re.IGNORECASE)
 
     if update_pattern_check.search(txt):
@@ -982,7 +957,6 @@ async def channel_handler(event):
         else:
             logger.warning(f"No mapping found for token symbol: '{token_sym}' in update message {message_id}. Cannot reply to initial announcement.")
 
-
         prof_match = re.search(r"(\d+)%", txt)
         prof = prof_match.group(1) + "%" if prof_match else "significant"
 
@@ -1001,7 +975,6 @@ async def channel_handler(event):
                  logger.debug(f"Extracted new MC (fallback): {new_mc} from message {message_id}.")
              else:
                 logger.warning(f"Could not extract *any* MC value for update message {message_id}: {txt[:100]}...")
-
 
         upd_text = build_update_template(token_sym.upper(), new_mc, prof)
         gif_url = await get_bot_setting('custom_gif')
@@ -1026,7 +999,6 @@ async def channel_handler(event):
             except Exception as e:
                 logger.error(f"Error sending update to target {target_channel_id} for message {message_id}: {e}", exc_info=True)
 
-
         return
 
     contract = extract_contract(txt)
@@ -1040,7 +1012,6 @@ async def channel_handler(event):
 
     logger.info(f"Processing as new call for contract: {contract} from message {message_id}.")
     await record_processed_contract(contract)
-
 
     logger.info(f"➡️ Sending contract {contract} to @ttfbotbot at {now} for message {message_id}.")
     ttf_response = None
@@ -1068,7 +1039,6 @@ async def channel_handler(event):
         logger.error(f"⚠️ TTF bot error for contract {contract} (from message {message_id}): {e}", exc_info=True)
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"❌ TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
         return
-
 
     if ttf_response and ttf_response.raw_text:
         logger.info(f"Parsing TTF bot output for contract {contract}: {ttf_response.raw_text[:100]}...")
@@ -1100,11 +1070,10 @@ async def channel_handler(event):
                     caption=new_text,
                     buttons=buttons
                 ))
-                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
+                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}")
 
                 if announcement_id is None:
                     announcement_id = msg.id
-
 
             except Exception as e:
                 logger.error(f"Error sending new call announcement to target {target_channel_id} for contract {contract}: {e}", exc_info=True)
@@ -1116,11 +1085,9 @@ async def channel_handler(event):
              await add_token_mapping(token_name.lower(), contract, None)
              logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}). Mapping stored without announcement ID.")
 
-
     else:
         logger.warning(f"TTF bot did not return a message or message was empty for contract {contract} from message {message_id}. Cannot announce.")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠️ TTF bot returned empty message for contract: `{contract}` (from message {message_id} in {chat_id}). Cannot announce."))
-
 
 async def resume_after(minutes: int, admin_id: int):
     if minutes <= 0:
@@ -1139,7 +1106,6 @@ async def resume_after(minutes: int, admin_id: int):
             logger.error(f"Failed to send resume message to admin {admin_id}: {e}")
     else:
         logger.info(f"Bot status changed from 'paused' to '{current_status}' during pause period. Not automatically resuming.")
-
 
 async def correct_last_announcement():
     targets = await get_channels('target')
@@ -1202,7 +1168,6 @@ async def correct_last_announcement():
 
     logger.info("Last announcement correction task finished.")
 
-
 async def check_bot_admin() -> bool:
     target_channels = await get_channels('target')
     if not target_channels:
@@ -1230,7 +1195,6 @@ async def check_bot_admin() -> bool:
             is_admin_in_all_targets = False
 
     return is_admin_in_all_targets
-
 
 async def get_admin_dashboard():
     loop = asyncio.get_running_loop()
@@ -1293,14 +1257,12 @@ async def main():
     else:
         logger.info("Default source channel already exists.")
 
-
     tgt_ch = await get_channels('target')
     if not any(c['channel_id']==DEFAULT_TARGET_CHANNEL['channel_id'] for c in tgt_ch):
         await add_channel(**DEFAULT_TARGET_CHANNEL)
         logger.info("Default target channel ensured.")
     else:
          logger.info("Default target channel already exists.")
-
 
     for k,v in DEFAULT_BOT_SETTINGS.items():
         db_val = await asyncio.to_thread(get_bot_setting_sync, k)
@@ -1309,7 +1271,6 @@ async def main():
              logger.info(f"Default setting '{k}' ensured.")
         else:
              logger.debug(f"Setting '{k}' already exists in DB.")
-
 
     await bot_client.start(bot_token=BOT_TOKEN)
     logger.info("🤖 Bot client started and connected.")
@@ -1322,7 +1283,6 @@ async def main():
     else:
         logger.warning("⚠️ User client not yet authorized; please visit the /login page via web.")
         logger.warning("⚠️ Bot might not function correctly without user client authorized (TTF interaction, source channel access).")
-
 
     if not await check_bot_admin():
         logger.error("❌ Bot lacks admin rights in one or more target channels. Posting might fail.")
@@ -1361,7 +1321,6 @@ if __name__ == '__main__':
         time.sleep(5)
         ping()
 
-
     threading.Thread(target=start_self_ping, daemon=True).start()
     logger.info(f"Starting Hypercorn server on {config.bind[0]} and running bot asyncio loop.")
 
@@ -1378,5 +1337,3 @@ if __name__ == '__main__':
         logger.info("Bot interrupted by user. Shutting down.")
     except Exception as e:
         logger.critical(f"Unhandled exception in main runner: {e}", exc_info=True)
-
-
