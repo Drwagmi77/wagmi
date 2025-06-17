@@ -203,8 +203,8 @@ def remove_channel_sync(channel_id, channel_type):
     try: 
         conn = get_connection() 
         with conn.cursor() as cur: 
-cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s",
-            (channel_id, channel_type))
+              cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s",
+                       (channel_id, channel_type))
                 
         conn.commit() 
         if cur.rowcount > 0: 
