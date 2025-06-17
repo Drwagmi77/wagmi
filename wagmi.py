@@ -16,13 +16,25 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
 
-DB_NAME    = os.environ.get("DB_NAME", "wagmi_82kq")
-DB_USER    = os.environ.get("DB_USER", "wagmi_82kq_user")
-DB_PASS    = os.environ.get("DB_PASS", "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo")
-DB_HOST    = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com")
-DB_PORT    = os.environ.get("DB_PORT", "5432")
-API_ID     = int(os.environ.get("API_ID", 28146969))
-API_HASH   = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
+import os
+from urllib.parse import urlparse
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    parsed_url = urlparse(DATABASE_URL)
+    DB_USER = parsed_url.username
+    DB_PASS = parsed_url.password
+    DB_HOST = parsed_url.hostname
+    DB_PORT = parsed_url.port
+    DB_NAME = parsed_url.path[1:]  # [1:] ile '/'-den sonraki kısmı alır
+else:
+    DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq")
+    DB_USER = os.environ.get("DB_USER", "wagmi_82kq_user")
+    DB_PASS = os.environ.get("DB_PASS", "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo")
+    DB_HOST = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com")
+    DB_PORT = os.environ.get("DB_PORT", "5432")
+API_ID = int(os.environ.get("API_ID", 28146969))
+API_HASH = os.environ.get("API_HASH", "5c8acdf2a7358589696af178e2319443")
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", '7834122356:AAGszZL-bgmggu_77aH0_lszBqe-Rei25_w')
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
