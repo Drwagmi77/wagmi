@@ -205,7 +205,7 @@ def remove_channel_sync(channel_id, channel_type):
         with conn.cursor() as cur: 
 cur.execute("DELETE FROM channels WHERE channel_id = %s AND channel_type = %s",
             (channel_id, channel_type))
-                        (channel_id, channel_type)) 
+                
         conn.commit() 
         if cur.rowcount > 0: 
             logger.info(f"{channel_type.capitalize()} channel {channel_id} removed.") 
