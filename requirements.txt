@@ -5,5 +5,4 @@ requests
 hypercorn
 asgiref
 Pillow
-telethon==1.28.5
-Pillow==10.0.0
+
