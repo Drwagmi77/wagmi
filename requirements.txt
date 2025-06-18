@@ -5,4 +5,7 @@ requests
 hypercorn
 asgiref
 Pillow
-
+telethon==1.28.5
+psycopg2-binary==2.9.9
+flask==2.3.2
+python-dotenv==1.0.0
