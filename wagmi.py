@@ -139,7 +139,7 @@ async def channel_handler(event):
 #         logger.info("Admin panel accessed")
 
 async def main():
-    await user_client.start()
+    await user_client.start(phone='+905424277677')  # Telefon numarası manuel olarak eklendi
     await bot_client.start()
     await user_client.run_until_disconnected()
 
