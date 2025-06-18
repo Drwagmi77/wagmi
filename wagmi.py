@@ -136,13 +136,11 @@ async def main():
     await user_client.run_until_disconnected()
 
 async def start_server():
-    await asyncio.gather(
-        main(),
-        asyncio.start_server(lambda r, w: None, '0.0.0.0', port)
-    )
+    server = await asyncio.start_server(lambda r, w: None, '0.0.0.0', 10000)
+    await asyncio.gather(main(), server.serve_forever())
 
 if __name__ == '__main__':
     import os
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server())
