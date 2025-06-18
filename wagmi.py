@@ -223,9 +223,8 @@ def is_message_processed_sync(chat_id, message_id):
     try: 
         conn = get_connection() 
         with conn.cursor() as cur: 
-            cur.execute("SELECT 1 FROM processed_messages WHERE chat_id = %s AND 
-message_id = %s", 
-                        (chat_id, message_id)) 
+           cur.execute("SELECT 1 FROM processed_messages WHERE chat_id = %s AND message_id = %s",
+                   (chat_id, message_id)) 
             return cur.fetchone() is not None 
     except Exception as e: 
          logger.error(f"Error checking if message {message_id} in chat {chat_id} processed: 
