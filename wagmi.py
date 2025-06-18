@@ -21,7 +21,7 @@ DEFAULT_TARGET_CHANNEL = {'channel_id': -1002405509240}  # Wagmi Vip ☢
 
 # Telegram istemcileri
 bot_client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
-user_client = TelegramClient('user_session', api_id, api_hash)  # Düzeltildi!
+user_client = TelegramClient('user_session', api_id, api_hash)
 
 # Veritabanı simülasyonu
 processed_contracts = set()
@@ -68,53 +68,4 @@ def build_update_template(token_name, market_cap, prof):
     d = ImageDraw.Draw(img)
     font = ImageFont.load_default()
     d.text((10, 10), f"Token: {token_name}", fill=(255, 255, 255), font=font)
-    d.text((10, 50), f"Market Cap: {market_cap}", fill=(255, 255, 255), font=font)
-    d.text((10, 90), f"Profit: {prof}", fill=(255, 255, 255), font=font)
-    d.text((10, 130), "Early GEM Hunters Winning Big! 💎", fill=(255, 255, 255), font=font)
-
-    file_content = io.BytesIO()
-    img.save(file_content, format='GIF')
-    file_content.name = f"update_announcement_{token_name}.gif"
-    file_content.seek(0)
-    return file_content
-
-def build_announcement_buttons(contract):
-    return [
-        [Button.url("Chart", f"https://dexscreener.com/solana/{contract}")],
-        [Button.url("Trojan", f"https://t.me/solana_trojanbot?start=r-ttf-{contract}")],
-        [Button.url("Soul", f"https://t.me/soul_sniper_bot?start=4U0hnwLCbX_{contract}")],
-        [Button.url("MEVX", f"https://t.me/MEVXTradingBot?start=<contract>{contract}")],
-        [Button.url("Algora", f"https://t.me/algoratradingbot?start=r-ttf-{contract}")],
-        [Button.url("Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielZukn5b-{contract}")],
-        [Button.url("GMGN", f"https://t.me/GMGN_sol3_bot?start=CcJ5m3wJ5JhLpc5mFB0ydeHuKasPQeFa1zLc_{contract}")]
-    ]
-
-@user_client.on(events.NewMessage(incoming=True, chats=[c['channel_id'] for c in get_channels_sync('source')]))
-async def channel_handler(event):
-    chat_id = event.chat_id
-    message_id = event.id
-    message_text = event.message.message
-    logger.info(f"Received message {message_id} from chat {chat_id}: {message_text}")
-
-    contract = extract_contract(message_text)
-    if not contract:
-        return
-
-    logger.info(f"Processing as new call for contract: {contract} from message {message_id}")
-    if is_processed_contract(contract):
-        return
-
-    record_processed_contract(contract)
-    logger.info(f"Recorded processed contract: {contract}")
-
-    network = "Unknown"
-    if "#SOL" in message_text:
-        network = "#SOL"
-    elif "#ETH" in message_text:
-        network = "#ETH"
-
-    template = build_new_template(contract, network)
-    buttons = build_announcement_buttons(contract)
-    await bot_client.send_file(
-        -1002405509240,
-        file=template,
+    d.text((10, 50), f"Market Cap: {market_cap}", fill=(255
