@@ -118,28 +118,3 @@ async def channel_handler(event):
     await bot_client.send_file(
         -1002405509240,
         file=template,
-        caption=f"New {network} GEM Landed! 💎 {contract}",
-        buttons=buttons
-    )
-    logger.info(f"Sending new call announcement for contract {contract} to target channel")
-
-# Admin panelini devre dışı bırak
-# @bot_client.on(events.NewMessage(incoming=True, from_users=[DEFAULT_ADMIN_ID]))
-# async def admin_handler(event):
-#     if event.message.message == '/start':
-#         await event.respond("Hey Boss!")
-#         logger.info("Admin panel accessed")
-
-async def main():
-    await user_client.start()
-    await bot_client.start()
-    await user_client.run_until_disconnected()
-
-async def start_server():
-    await asyncio.gather(main(), asyncio.start_server(lambda: None, '0.0.0.0', port))
-
-if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 5000))
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(start_server())
