@@ -21,9 +21,9 @@ DEFAULT_TARGET_CHANNEL = {'channel_id': -1002405509240}  # Wagmi Vip ☢
 
 # Telegram istemcileri
 bot_client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
-user_client = TelegramClient('user_session', api_id, api_hash)
+user_client = TelegramClient('user_session', api_id, api_hash)  # Düzeltildi!
 
-# Veritabanı simülasyonu (gerçek bir DB kullanıyorsan bu kısmı güncelle)
+# Veritabanı simülasyonu
 processed_contracts = set()
 
 def get_channels_sync(type):
@@ -34,7 +34,6 @@ def get_channels_sync(type):
     return []
 
 def extract_contract(message):
-    # Basit bir contract çıkarma mantığı (örneğin, 44 karakterli adresler)
     import re
     contract_pattern = r'[1-9A-HJ-NP-Za-km-z]{44}'
     match = re.search(contract_pattern, message)
@@ -47,11 +46,9 @@ def record_processed_contract(contract):
     processed_contracts.add(contract)
 
 def parse_ttf_output(text):
-    # TTF artık kullanılmıyor, bu fonksiyon boş bırakılabilir
     return {}
 
 def build_new_template(contract, network):
-    # TTF’siz GIF şablon
     img = Image.new('RGB', (400, 300), color=(0, 128, 0))
     d = ImageDraw.Draw(img)
     font = ImageFont.load_default()
@@ -67,7 +64,6 @@ def build_new_template(contract, network):
     return file_content
 
 def build_update_template(token_name, market_cap, prof):
-    # TTF’siz güncelleme şablonu
     img = Image.new('RGB', (400, 300), color=(0, 128, 0))
     d = ImageDraw.Draw(img)
     font = ImageFont.load_default()
@@ -111,16 +107,12 @@ async def channel_handler(event):
     record_processed_contract(contract)
     logger.info(f"Recorded processed contract: {contract}")
 
-    # @ttfbotbot ile TTF sorgusu çıkarılıyor, senin hesabın üzerinden devam ediliyor
-    # Mesajdan ağ bilgisini çıkar
-    network = "Unknown"  # Varsayılan
+    network = "Unknown"
     if "#SOL" in message_text:
         network = "#SOL"
     elif "#ETH" in message_text:
         network = "#ETH"
-    # Daha fazla ağ eklenebilir
 
-    # TTF’siz şablon oluştur
     template = build_new_template(contract, network)
     buttons = build_announcement_buttons(contract)
     await bot_client.send_file(
@@ -131,7 +123,7 @@ async def channel_handler(event):
     )
     logger.info(f"Sending new call announcement for contract {contract} to target channel")
 
-# Admin panelini devre dışı bırak (yorum satırına al)
+# Admin panelini devre dışı bırak
 # @bot_client.on(events.NewMessage(incoming=True, from_users=[DEFAULT_ADMIN_ID]))
 # async def admin_handler(event):
 #     if event.message.message == '/start':
@@ -139,10 +131,15 @@ async def channel_handler(event):
 #         logger.info("Admin panel accessed")
 
 async def main():
-    await user_client.start(phone='+905424277677')  # Telefon numarası manuel olarak eklendi
+    await user_client.start()
     await bot_client.start()
     await user_client.run_until_disconnected()
 
+async def start_server():
+    await asyncio.gather(main(), asyncio.start_server(lambda: None, '0.0.0.0', port))
+
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(start_server())
