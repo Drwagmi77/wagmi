@@ -21,7 +21,7 @@ DEFAULT_TARGET_CHANNEL = {'channel_id': -1002405509240}  # Wagmi Vip ☢
 
 # Telegram istemcileri
 bot_client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
-user_client = TelegramClient('user', api_id, api_hash)
+user_client = TelegramClient('user_session', api_id, api_hash)
 
 # Veritabanı simülasyonu (gerçek bir DB kullanıyorsan bu kısmı güncelle)
 processed_contracts = set()
