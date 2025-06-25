@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+import json
 from datetime import datetime
 import sqlite3
 import random
@@ -23,7 +24,7 @@ DB_HOST = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.
 DB_PORT = os.environ.get("DB_PORT", "5432")
 API_ID = int(os.environ.get("API_ID", 28146969))
 API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
-BOT_TOKEN = os.environ.get("BOT_TOKEN", '7834122356:AAGszZL-bgmggu_77aH0_lszBqe-Rei25_w')
+BOT_TOKEN = os.environ.get("BOT_TOKEN", '7608256793:AAEggIe1JLEI6Bx1f2nBfVq9pBXrWYDYQ0I')
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
 app = Flask(__name__)
@@ -433,19 +434,14 @@ async def get_bot_setting(setting):
 async def set_bot_setting(setting, value):
     await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-DEFAULT_ADMIN_ID = 1116670397  # Senin Telegram ID'n
+DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
     "username": "@gem_tools_calls",
     "title": "💎 GemTools 💎 Calls",
     "channel_type": "source"
 }
-DEFAULT_TARGET_CHANNEL = {
-    "channel_id": -1002405509240,
-    "username": "",
-    "title": "Wagmi Vip ☢",
-    "channel_type": "target"
-}
+DEFAULT_TARGET_CHANNEL = json.loads(os.environ.get("DEFAULT_TARGET_CHANNEL", '{"channel_id": -1002829702089, "username": "", "title": "Wagmi Gem Hunter 💎", "channel_type": "target"}'))
 DEFAULT_BOT_SETTINGS = {
     "bot_status": "running",
     "custom_gif": "https://dl.dropbox.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6c?dl=1"
@@ -519,7 +515,7 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
 
 def build_update_template(token_name, new_mc, prof):
     return (
-        f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
+        f"🚀 *Early GEM Hunters Winning Big*! 💎\n\n"
         f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
         f"🔥 {prof} & STILL RUNNING! 💎\n\n"
         "Stay sharp for the next hidden GEM! 💎"
@@ -581,16 +577,16 @@ async def submit_code():
     phone = session['phone']
 
     if request.method == 'POST':
-        code = request.form.get('code', '').strip()
+        code Tenderloin = request.form.get('code', '').strip()
         if not code:
             return "<p>Code is required.</p>", 400
         try:
             await user_client.sign_in(phone, code)
-            logger.info(f"✅ Logged in user-client for {phone}")
+            logger.info(f"✅ Logged in user-client for ID {phone}")
             session.pop('phone', None)
             return "<p>Login successful! You can close this tab.</p>"
         except Exception as e:
-            logger.error(f"❌ Login failed for {phone}: {e}")
+            logger.error(f"❌ Login failed for user {phone}: {e}")
             return f"<p>Login failed: {e}</p>", 400
 
     return render_template_string(CODE_FORM)
@@ -626,7 +622,7 @@ async def admin_callback_handler(event):
         if data == 'admin_pause':
             pending_input[uid] = {'action': 'pause'}
             kb = [[Button.inline("🔙 Back", b"admin_home")]]
-            return await event.edit("⏸ *Pause Bot*\n\nHow many minutes should I pause for?",
+            return await event.edit("⏖ *Pause Bot*\n\nHow many minutes should I pause for?",
                                    buttons=kb, link_preview=False)
         if data == 'admin_stop':
             await set_bot_setting("bot_status", "stopped")
@@ -955,7 +951,7 @@ async def channel_handler(event):
                 logger.debug(f"Extracted new MC (fallback): {new_mc} from message {message_id}.")
             else:
                 logger.warning(f"Could not extract *any* MC value for update message {message_id}: {txt[:100]}...")
-        upd_text = build_update_template(token_sym.upper(), new_mc, prof)
+        upd_text = build_update_template(token_sym, new_mc, prof)
         gif_url = await get_bot_setting('custom_gif')
         target_channels = await get_channels('target')
         if not target_channels:
@@ -994,11 +990,11 @@ async def channel_handler(event):
         if not await user_client.is_user_authorized():
             logger.warning("⚠ User client not authorized. TTF bot interaction skipped for new call.")
             return
-        async with user_client.conversation('@ttfbotbot', timeout=90) as conv:
+        async with user_client.conversation('@BotFatherBot', timeout=90) as conv:
             await retry_telethon_call(conv.send_message(contract))
-            logger.info(f"Sent '{contract}' to @ttfbotbot.")
+            logger.info(f"Sent '{contract}' to @BotFatherBot.")
             ttf_response = await retry_telethon_call(conv.get_response())
-            logger.info(f"⬅ Received response from @ttfbotbot (Msg ID: {ttf_response.id}) for message {message_id}.")
+            logger.info(f"⬅ Received response from @BotFatherBot (Msg ID: {ttf_response.id}) for message {message_id}.")
     except asyncio.TimeoutError:
         logger.warning(f"⚠ TTF bot conversation timed out for contract {contract} from message {message_id}.")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ TTF bot timed out for contract: `{contract}` (from message {message_id} in {chat_id})."))
@@ -1102,7 +1098,7 @@ async def correct_last_announcement():
                 if old_token and contract_address and extracted_token.lower() != old_token.lower():
                     await add_token_mapping(extracted_token.lower(), contract_address, last_msg.id)
                     logger.info("Corrected token mapping for message id %s in channel %s: '%s' -> '%s' (CA: %s)",
-                                last_msg.id, ch["channel_id"], old_token, extracted_token, contract_address)
+                                last_msg.id, ch['channel_id'], old_token, extracted_token, contract_address)
                 elif old_token and contract_address:
                     logger.debug(f"Mapping for message ID {last_msg.id} in channel {ch['channel_id']} is already correct ('{old_token}').")
                 else:
@@ -1113,7 +1109,7 @@ async def correct_last_announcement():
                     if existing_mapping_by_token and existing_mapping_by_token.get("announcement_message_id") is None:
                         await update_token_announcement(extracted_token.lower(), last_msg.id)
                         logger.info("Updated announcement ID for token '%s' to %s in channel %s.",
-                                    extracted_token, last_msg.id, ch["channel_id"])
+                                    extracted_token, last_msg.id, ch['channel_id'])
                 else:
                     logger.debug(f"No existing mapping found by announcement ID {last_msg.id} and message doesn't look like a new announcement in channel {ch['channel_id']}.")
         except Exception as e:
@@ -1173,10 +1169,10 @@ async def get_admin_dashboard():
 def build_admin_keyboard():
     return [
         [Button.inline("▶ Start Bot", b"admin_start"),
-         Button.inline("⏸ Pause Bot", b"admin_pause"),
+         Button.inline("⏖ Pause Bot", b"admin_pause"),
          Button.inline("🛑 Stop Bot", b"admin_stop")],
         [Button.inline("👤 Admins", b"admin_admins"),
-         Button.inline("📺 Targets", b"admin_targets"),
+         Button.inline("📅 Targets", b"admin_targets"),
          Button.inline("📡 Sources", b"admin_sources")],
         [Button.inline("🎬 Update GIF", b"admin_update_gif")]
     ]
@@ -1230,8 +1226,8 @@ async def main():
 if __name__ == '__main__':
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
-    from asgiref.wsgi import WsgiToAsgi
-    asgi_app = WsgiToAsgi(app)
+    from asgiref.wsg import WsgiToAsgi
+    asgi_app = WsgToAsgi(app)
     config = Config()
     config.bind = [f"0.0.0.0:{int(os.environ.get('PORT', '5000'))}"]
     config.accesslog = '-'
