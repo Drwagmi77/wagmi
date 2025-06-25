@@ -17,10 +17,11 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
 
-DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq")
-DB_USER = os.environ.get("DB_USER", "wagmi_82kq_user")
-DB_PASS = os.environ.get("DB_PASS", "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo")
-DB_HOST = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com")
+# Ortam değişkenlerinden yapılandırma (değiştirilen yerler)
+DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")  # Eski: "wagmi_82kq"
+DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")  # Eski: "wagmi_82kq_user"
+DB_PASS = os.environ.get("DB_PASS", "Rz2yaYvgWNdifqFsxwVSFz4u8lcJeqMZ")  # Eski: "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo"
+DB_HOST = os.environ.get("DB_HOST", "dpg-d1e7cth5pdvs73fkod70-a.oregon-postgres.render.com")  # Eski: "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com"
 DB_PORT = os.environ.get("DB_PORT", "5432")
 API_ID = int(os.environ.get("API_ID", 28146969))
 API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
@@ -33,6 +34,7 @@ app.secret_key = SECRET_KEY
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
+# Database connection function (değiştirilen yerler)
 def get_connection():
     try:
         return psycopg2.connect(
@@ -40,7 +42,8 @@ def get_connection():
             user=DB_USER,
             password=DB_PASS,
             host=DB_HOST,
-            port=DB_PORT
+            port=DB_PORT,
+            sslmode="require"  # Yeni eklenen zorunlu SSL ayar
         )
     except psycopg2.OperationalError as e:
         logger.error(f"Database connection failed: {e}")
