@@ -24,7 +24,7 @@ DB_HOST = os.environ.get("DB_HOST", "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.
 DB_PORT = os.environ.get("DB_PORT", "5432")
 API_ID = int(os.environ.get("API_ID", 28146969))
 API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
-BOT_TOKEN = os.environ.get("BOT_TOKEN", '7608256793:AAEggIe1JLEI6Bx1f2nBfVq9pBXrWYDYQ0I')
+BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Yeni token: 7608256793:AAHm8lwZfxKB_0djzyiBRRQxKM34JsdpDlQ
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
 app = Flask(__name__)
@@ -434,7 +434,7 @@ async def get_bot_setting(setting):
 async def set_bot_setting(setting, value):
     await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))
+DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))  # Yeni kullanıcı ID
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
     "username": "@gem_tools_calls",
@@ -515,7 +515,7 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
 
 def build_update_template(token_name, new_mc, prof):
     return (
-        f"🚀 *Early GEM Hunters Winning Big*! 💎\n\n"
+        f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
         f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
         f"🔥 {prof} & STILL RUNNING! 💎\n\n"
         "Stay sharp for the next hidden GEM! 💎"
@@ -577,16 +577,16 @@ async def submit_code():
     phone = session['phone']
 
     if request.method == 'POST':
-        code Tenderloin = request.form.get('code', '').strip()
+        code = request.form.get('code', '').strip()
         if not code:
             return "<p>Code is required.</p>", 400
         try:
             await user_client.sign_in(phone, code)
-            logger.info(f"✅ Logged in user-client for ID {phone}")
+            logger.info(f"✅ Logged in user-client for {phone}")
             session.pop('phone', None)
             return "<p>Login successful! You can close this tab.</p>"
         except Exception as e:
-            logger.error(f"❌ Login failed for user {phone}: {e}")
+            logger.error(f"❌ Login failed for {phone}: {e}")
             return f"<p>Login failed: {e}</p>", 400
 
     return render_template_string(CODE_FORM)
@@ -622,7 +622,7 @@ async def admin_callback_handler(event):
         if data == 'admin_pause':
             pending_input[uid] = {'action': 'pause'}
             kb = [[Button.inline("🔙 Back", b"admin_home")]]
-            return await event.edit("⏖ *Pause Bot*\n\nHow many minutes should I pause for?",
+            return await event.edit("⏸ *Pause Bot*\n\nHow many minutes should I pause for?",
                                    buttons=kb, link_preview=False)
         if data == 'admin_stop':
             await set_bot_setting("bot_status", "stopped")
@@ -984,17 +984,18 @@ async def channel_handler(event):
     logger.info(f"➡ Sending contract {contract} to @ttfbotbot at {now} for message {message_id}.")
     ttf_response = None
     try:
+        if not await user_client.is_user_authorized():
+            logger.warning(f"⚠ User client not authorized for TTF interaction. Skipping for message {message_id}.")
+            await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ User client not authorized for contract: `{contract}` (from message {message_id} in {chat_id}). Please visit /login."))
+            return
         if not user_client.is_connected():
             await user_client.connect()
-            logger.info("User client connected.")
-        if not await user_client.is_user_authorized():
-            logger.warning("⚠ User client not authorized. TTF bot interaction skipped for new call.")
-            return
-        async with user_client.conversation('@BotFatherBot', timeout=90) as conv:
+            logger.info("User client reconnected.")
+        async with user_client.conversation('@ttfbotbot', timeout=90) as conv:
             await retry_telethon_call(conv.send_message(contract))
-            logger.info(f"Sent '{contract}' to @BotFatherBot.")
+            logger.info(f"Sent '{contract}' to @ttfbotbot.")
             ttf_response = await retry_telethon_call(conv.get_response())
-            logger.info(f"⬅ Received response from @BotFatherBot (Msg ID: {ttf_response.id}) for message {message_id}.")
+            logger.info(f"⬅ Received response from @ttfbotbot (Msg ID: {ttf_response.id}) for message {message_id}.")
     except asyncio.TimeoutError:
         logger.warning(f"⚠ TTF bot conversation timed out for contract {contract} from message {message_id}.")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ TTF bot timed out for contract: `{contract}` (from message {message_id} in {chat_id})."))
@@ -1169,7 +1170,7 @@ async def get_admin_dashboard():
 def build_admin_keyboard():
     return [
         [Button.inline("▶ Start Bot", b"admin_start"),
-         Button.inline("⏖ Pause Bot", b"admin_pause"),
+         Button.inline("⏸ Pause Bot", b"admin_pause"),
          Button.inline("🛑 Stop Bot", b"admin_stop")],
         [Button.inline("👤 Admins", b"admin_admins"),
          Button.inline("📅 Targets", b"admin_targets"),
@@ -1206,16 +1207,19 @@ async def main():
             logger.info(f"Default setting '{k}' ensured.")
         else:
             logger.debug(f"Setting '{k}' already exists in DB.")
-    await bot_client.start(bot_token=BOT_TOKEN)
-    logger.info("🤖 Bot client started and connected.")
+    try:
+        await bot_client.start(bot_token=BOT_TOKEN)
+        logger.info("🤖 Bot client started and connected.")
+    except Exception as e:
+        logger.critical(f"❌ Failed to start bot client: {e}. Please check BOT_TOKEN environment variable.")
+        raise
     await user_client.connect()
-    if await user_client.is_user_authorized():
+    if not await user_client.is_user_authorized():
+        logger.warning("⚠ User client not authorized. Please visit /login to authorize.")
+    else:
         logger.info("👤 User client authorized.")
         asyncio.create_task(correct_last_announcement())
         logger.info("Started background task: correct_last_announcement.")
-    else:
-        logger.warning("⚠ User client not yet authorized; please visit the /login page via web.")
-        logger.warning("⚠ Bot might not function correctly without user client authorized (TTF interaction, source channel access).")
     if not await check_bot_admin():
         logger.error("❌ Bot lacks admin rights in one or more target channels. Posting might fail.")
     else:
@@ -1226,8 +1230,8 @@ async def main():
 if __name__ == '__main__':
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
-    from asgiref.wsg import WsgiToAsgi
-    asgi_app = WsgToAsgi(app)
+    from asgiref.wsgi import WsgiToAsgi
+    asgi_app = WsgiToAsgi(app)
     config = Config()
     config.bind = [f"0.0.0.0:{int(os.environ.get('PORT', '5000'))}"]
     config.accesslog = '-'
