@@ -17,11 +17,10 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
 
-# Ortam değişkenlerinden yapılandırma (değiştirilen yerler)
-DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")  # Eski: "wagmi_82kq"
-DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")  # Eski: "wagmi_82kq_user"
-DB_PASS = os.environ.get("DB_PASS", "Rz2yaYvgWNdifqFsxwVSFz4u8lcJeqMZ")  # Eski: "ROPvICF4rzRBA5nIGoLzweJMJYOXUKWo"
-DB_HOST = os.environ.get("DB_HOST", "dpg-d1e7cth5pdvs73fkod70-a.oregon-postgres.render.com")  # Eski: "dpg-d0dojsmuk2gs73dbrcbg-a.oregon-postgres.render.com"
+DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
+DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
+DB_PASS = os.environ.get("DB_PASS", "Rz2yaYvgWNdifqFsxwVSFz4u8lcJeqMZ")
+DB_HOST = os.environ.get("DB_HOST", "dpg-d1e7cth5pdvs73fkod70-a.oregon-postgres.render.com")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 API_ID = int(os.environ.get("API_ID", 28146969))
 API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
@@ -34,7 +33,6 @@ app.secret_key = SECRET_KEY
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
-# Database connection function (değiştirilen yerler)
 def get_connection():
     try:
         return psycopg2.connect(
@@ -43,7 +41,7 @@ def get_connection():
             password=DB_PASS,
             host=DB_HOST,
             port=DB_PORT,
-            sslmode="require"  # Yeni eklenen zorunlu SSL ayar
+            sslmode="require"
         )
     except psycopg2.OperationalError as e:
         logger.error(f"Database connection failed: {e}")
@@ -437,7 +435,7 @@ async def get_bot_setting(setting):
 async def set_bot_setting(setting, value):
     await asyncio.to_thread(set_bot_setting_sync, setting, value)
 
-DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))  # Yeni kullanıcı ID
+DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
     "username": "@gem_tools_calls",
@@ -516,20 +514,21 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
         "🌐 *Network:* #SOL"
     )
 
-def build_update_template(token_name, new_mc, prof):
+def build_update_template(token_name, old_mc, new_mc, prof):
     return (
-        f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
-        f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
-        f"🔥 {prof} & STILL RUNNING! 💎\n\n"
-        "Stay sharp for the next hidden GEM! 💎"
+        f"🚀 ${token_name}\n"
+        f"{prof}x ✅\n"
+        f"💵 MC: ${old_mc} ➡️ ${new_mc}\n"
+        f"🔥 More than {prof}% PROFIT 🔥\n"
+        "🚀 WAGMI — We All Gonna Make It!"
     )
 
 def build_announcement_buttons(contract):
     return [
         [Button.url("📈 Chart", f"https://dexscreener.com/solana/{contract}"),
-         Button.url("🛡 Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi")],
-        [Button.url("🐉 Soul", "https://t.me/soul_sniper_bot?start=9FDbnU6TsKGX"),
-         Button.url("🤖 MEVX", f"https://t.me/MevxTradingBot?start={contract}")],
+         Button.url("🛡 Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi0001")],
+        [Button.url("🐉 Soul", "https://t.me/soul_sniper_bot?start=WpQErcIT5oHr"),
+         Button.url("🤖 MEVX", "https://t.me/Mevx?start=wN17b0M1lsJs")],
         [Button.url("📊 Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}")],
         [Button.url("🚀 Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
          Button.url("🔗 GMGN", f"https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC")]
@@ -939,23 +938,25 @@ async def channel_handler(event):
         else:
             logger.warning(f"No mapping found for token symbol: '{token_sym}' in update message {message_id}. Cannot reply to initial announcement.")
         prof_match = re.search(r"(\d+)%", txt)
-        prof = prof_match.group(1) + "%" if prof_match else "significant"
-        mc_extraction_regex = re.compile(r"MC:\s*\$?[\d\.,KkMmBb]+\s*(?:->|[-–>→])\s*\$?([\d\.,KkMmBb]+)", re.IGNORECASE)
+        prof = prof_match.group(1) if prof_match else "unknown"
+        mc_extraction_regex = re.compile(r"MC:\s*\$?([\d\.,KkMmBb]+)\s*(?:->|[-–>→])\s*\$?([\d\.,KkMmBb]+)", re.IGNORECASE)
         mc_match_obj = mc_extraction_regex.search(txt)
-        new_mc = "N/A"
+        old_mc = "unknown"
+        new_mc = "unknown"
         if mc_match_obj:
-            new_mc = mc_match_obj.group(1)
-            logger.debug(f"Extracted new MC: {new_mc} from message {message_id}.")
+            old_mc = mc_match_obj.group(1)
+            new_mc = mc_match_obj.group(2)
+            logger.debug(f"Extracted old MC: {old_mc}, new MC: {new_mc} from message {message_id}.")
         else:
-            logger.warning(f"Could not extract new MC using primary regex for update message {message_id}: {txt[:100]}...")
+            logger.warning(f"Could not extract MC values using primary regex for update message {message_id}: {txt[:100]}...")
             simple_mc_search = re.findall(r"MC:\s*\$?(?:[\d\.,KkMmBb]+\s*(?:->|[-–>→])\s*\$?)?([\d\.,KkMmBb]+)", txt, re.IGNORECASE)
-            if simple_mc_search:
-                new_mc = simple_mc_search[-1]
-                logger.debug(f"Extracted new MC (fallback): {new_mc} from message {message_id}.")
+            if len(simple_mc_search) >= 2:
+                old_mc = simple_mc_search[0]
+                new_mc = simple_mc_search[1]
+                logger.debug(f"Extracted old MC (fallback): {old_mc}, new MC (fallback): {new_mc} from message {message_id}.")
             else:
-                logger.warning(f"Could not extract *any* MC value for update message {message_id}: {txt[:100]}...")
-        upd_text = build_update_template(token_sym, new_mc, prof)
-        gif_url = await get_bot_setting('custom_gif')
+                logger.warning(f"Could not extract *any* MC values for update message {message_id}: {txt[:100]}...")
+        upd_text = build_update_template(token_sym, old_mc, new_mc, prof)
         target_channels = await get_channels('target')
         if not target_channels:
             logger.warning("No target channels configured to send update.")
@@ -964,12 +965,10 @@ async def channel_handler(event):
             target_channel_id = target_channel_info["channel_id"]
             try:
                 logger.info(f"Sending update for '{token_sym}' to target channel ID: {target_channel_id} (replying to {announcement_to_reply_to}).")
-                await retry_telethon_call(bot_client.send_file(
+                await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
-                    file=gif_url,
-                    caption=upd_text,
-                    reply_to=announcement_to_reply_to,
-                    buttons=[[Button.url("🔗 Don't Miss Out", "https://t.me/solana_trojanbot?start=r-gemwagmi")]]
+                    message=upd_text,
+                    reply_to=announcement_to_reply_to
                 ))
                 logger.info(f"Update sent successfully to {target_channel_id}.")
             except Exception as e:
@@ -1008,7 +1007,7 @@ async def channel_handler(event):
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"❌ TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
         return
     if ttf_response and ttf_response.raw_text:
-        logger.info(f"Parsing TTF bot output for contract {contract}: {ttf_response.raw_text[:100]}...")
+        logger.info(f"Parsing TFF bot output for contract {contract}: {ttf_response.raw_text[:100]}...")
         data = parse_tff_output(ttf_response.raw_text)
         token_name = extract_token_name_from_source(txt)
         if token_name == "unknown":
@@ -1017,7 +1016,6 @@ async def channel_handler(event):
         new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
-        gif_url = await get_bot_setting('custom_gif')
         target_channels = await get_channels('target')
         if not target_channels:
             logger.warning("No target channels configured to send new call announcement.")
@@ -1027,10 +1025,9 @@ async def channel_handler(event):
             target_channel_id = target_channel_info["channel_id"]
             try:
                 logger.info(f"Sending new call announcement for '{token_name}' ({contract}) to target channel ID: {target_channel_id}.")
-                msg = await retry_telethon_call(bot_client.send_file(
+                msg = await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
-                    file=gif_url,
-                    caption=new_text,
+                    message=new_text,
                     buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
