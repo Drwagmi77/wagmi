@@ -1037,6 +1037,12 @@ async def channel_handler(event):
                     buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
+                # GIF ekle (sadece yeni sinyal için)
+                await retry_telethon_call(bot_client.send_file(
+                    target_channel_id,
+                    file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3ZXVmb25jdGd3b2N3ZjB2eTY1cXcxeGx2Zm9meW45bmI3anNnbXRxaiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/h26f7dQPNqXRjAb54O/giphy.gif',
+                    caption="🎉 Yeni sinyal kutlaması!"
+                ))
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
