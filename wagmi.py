@@ -515,11 +515,17 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
     )
 
 def build_update_template(token_name, old_mc, new_mc, prof):
+    # Market cap artışını hesapla (prof artık başlangıçtaki yüzdeden bağımsız olarak dinamik hesaplanacak)
+    old_mc_num = float(old_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
+    new_mc_num = float(new_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
+    multiplier = new_mc_num / old_mc_num  # Kat değeri (örneğin, 4.56x)
+    profit_percent = (multiplier - 1) * 100  # Yüzde kâr (örneğin, 456%)
+
     return (
         f"🚀 ${token_name}\n"
-        f"{prof}x ✅\n"
+        f"{multiplier:.2f}x ✅\n"  # Doğru kat değeri (2 ondalık basamakla)
         f"💵 MC: ${old_mc} ➡️ ${new_mc}\n"
-        f"🔥 More than {prof}% PROFIT 🔥\n"
+        f"🔥 {profit_percent:.0f}% PROFIT 🔥\n"  # Doğru yüzde kâr (ondalık kısım olmadan)
         "🚀 WAGMI — We All Gonna Make It!"
     )
 
