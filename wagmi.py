@@ -60,7 +60,7 @@ async def post_to_x(message, media_url=None):
         else:
             x_api.update_status(status=message)
         logger.info(f"X'te paylaşıldı: {message[:100]}...")
-    except tweepy.TweepError as e:
+    except tweepy.errors.TweepyException as e:
         logger.error(f"X paylaşım hatası: {e}")
     except Exception as e:
         logger.error(f"Medya indirme veya X paylaşım hatası: {e}")
