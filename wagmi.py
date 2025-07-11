@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 import sqlite3
 import random
-
 import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -16,7 +15,9 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
+import tweepy  # X API için eklendi
 
+# Ortam değişkenleri
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
 DB_PASS = os.environ.get("DB_PASS", "Rz2yaYvgWNdifqFsxwVSFz4u8lcJeqMZ")
@@ -26,12 +27,43 @@ API_ID = int(os.environ.get("API_ID", 28146969))
 API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
 BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Yeni token: 7608256793:AAHm8lwZfxKB_0djzyiBRRQxKM34JsdpDlQ
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
+X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY", "oh0FELsqrpjPD0wypGTBFhvSv")  # X API Key
+X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET", "UE9Y4jL6dhFPBZlVuG3tM5rmBrxLrLqMwUVScJ9nh6yvNuBwfx")  # X API Secret
+X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "1329104293568385026-ouINv6qxi6ZP7G8Eu1KZ8oIWIBEBiq")  # X Access Token
+X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "TBB1q1iDRi6DQ8a8Om7F3vpqvxbtjLIKLYlsfF0GE30ph")  # X Access Token Secret
+
+# X API bağlantısı
+auth = tweepy.OAuthHandler(X_CONSUMER_KEY, X_CONSUMER_SECRET)
+auth.set_access_token(X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
+x_api = tweepy.API(auth)
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
+
+# X paylaşım fonksiyonu
+async def post_to_x(message, media_url=None):
+    x_posting_enabled = await get_bot_setting("x_posting_enabled") or "enabled"
+    if x_posting_enabled != "enabled":
+        logger.info(f"X paylaşımı devre dışı, mesaj paylaşılmadı: {message[:100]}...")
+        return
+    try:
+        if len(message) > 280:  # X karakter sınırı
+            message = message[:277] + "..."
+        if media_url:
+            response = requests.get(media_url)
+            response.raise_for_status()
+            media = response.content
+            x_api.update_status_with_media(status=message, filename="media.gif", file=media)
+        else:
+            x_api.update_status(status=message)
+        logger.info(f"X'te paylaşıldı: {message[:100]}...")
+    except tweepy.TweepError as e:
+        logger.error(f"X paylaşım hatası: {e}")
+    except Exception as e:
+        logger.error(f"Medya indirme veya X paylaşım hatası: {e}")
 
 def get_connection():
     try:
@@ -445,7 +477,8 @@ DEFAULT_SOURCE_CHANNEL = {
 DEFAULT_TARGET_CHANNEL = json.loads(os.environ.get("DEFAULT_TARGET_CHANNEL", '{"channel_id": -1002829702089, "username": "", "title": "Wagmi Gem Hunter 💎", "channel_type": "target"}'))
 DEFAULT_BOT_SETTINGS = {
     "bot_status": "running",
-    "custom_gif": "https://dl.dropbox.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6c?dl=1"
+    "custom_gif": "https://dl.dropbox.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6c?dl=1",
+    "x_posting_enabled": "enabled"  # X paylaşımını kontrol etmek için eklendi
 }
 
 os.makedirs("logs", exist_ok=True)
@@ -515,17 +548,15 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
     )
 
 def build_update_template(token_name, old_mc, new_mc, prof):
-    # Market cap artışını hesapla (prof artık başlangıçtaki yüzdeden bağımsız olarak dinamik hesaplanacak)
     old_mc_num = float(old_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
     new_mc_num = float(new_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
-    multiplier = new_mc_num / old_mc_num  # Kat değeri (örneğin, 4.56x)
-    profit_percent = (multiplier - 1) * 100  # Yüzde kâr (örneğin, 456%)
-
+    multiplier = new_mc_num / old_mc_num
+    profit_percent = (multiplier - 1) * 100
     return (
         f"🚀 ${token_name}\n"
-        f"{multiplier:.2f}x ✅\n"  # Doğru kat değeri (2 ondalık basamakla)
+        f"{multiplier:.2f}x ✅\n"
         f"💵 MC: ${old_mc} ➡️ ${new_mc}\n"
-        f"🔥 {profit_percent:.0f}% PROFIT 🔥\n"  # Doğru yüzde kâr (ondalık kısım olmadan)
+        f"🔥 {profit_percent:.0f}% PROFIT 🔥\n"
         "🚀 WAGMI — We All Gonna Make It!"
     )
 
@@ -621,12 +652,12 @@ async def admin_callback_handler(event):
     try:
         if data == 'admin_home':
             return await event.edit(await get_admin_dashboard(),
-                                   buttons=build_admin_keyboard(), link_preview=False)
+                                   buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_start':
             await set_bot_setting("bot_status", "running")
             await event.answer('▶ Bot started')
             return await event.edit(await get_admin_dashboard(),
-                                   buttons=build_admin_keyboard(), link_preview=False)
+                                   buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_pause':
             pending_input[uid] = {'action': 'pause'}
             kb = [[Button.inline("🔙 Back", b"admin_home")]]
@@ -639,6 +670,16 @@ async def admin_callback_handler(event):
                                    buttons=[[Button.inline("🔄 Restart Bot (set to running)", b"admin_start")],
                                             [Button.inline("🔙 Back", b"admin_home")]],
                                    link_preview=False)
+        if data == 'admin_start_x_posting':
+            await set_bot_setting("x_posting_enabled", "enabled")
+            await event.answer('▶ X Posting started')
+            return await event.edit(await get_admin_dashboard(),
+                                   buttons=await build_admin_keyboard(), link_preview=False)
+        if data == 'admin_pause_x_posting':
+            await set_bot_setting("x_posting_enabled", "disabled")
+            await event.answer('⏸ X Posting paused')
+            return await event.edit(await get_admin_dashboard(),
+                                   buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_admins':
             admins = await get_admins()
             kb = [
@@ -762,7 +803,7 @@ async def admin_callback_handler(event):
         logger.error(f"Error in admin callback handler for user {uid}, data {data}: {e}")
         await event.answer("An error occurred.", alert=True)
         try:
-            await event.edit(await get_admin_dashboard(), buttons=build_admin_keyboard(),
+            await event.edit(await get_admin_dashboard(), buttons=await build_admin_keyboard(),
                             link_preview=False)
         except Exception:
             pass
@@ -795,7 +836,7 @@ async def admin_private_handler(event):
                 await event.reply(f"⏸ Paused for {m} minutes.")
                 asyncio.create_task(resume_after(m, uid))
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                                buttons=build_admin_keyboard(), link_preview=False))
+                                                                buttons=await build_admin_keyboard(), link_preview=False))
                 return
             if act == 'confirm_add_admin':
                 try:
@@ -812,7 +853,7 @@ async def admin_private_handler(event):
                     await add_admin(new_id, f"ID:{new_id}")
                     await event.reply(f"✅ Admin {new_id} added.")
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                                buttons=build_admin_keyboard(), link_preview=False))
+                                                                buttons=await build_admin_keyboard(), link_preview=False))
                 return
             if act == 'confirm_add_target':
                 channel_input = txt.strip()
@@ -837,7 +878,7 @@ async def admin_private_handler(event):
                     await add_channel(channel_id, channel_username, channel_title, "target")
                     await event.reply(f"✅ Target channel {channel_title} ({channel_id}) added.")
                     await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                                    buttons=build_admin_keyboard(), link_preview=False))
+                                                                    buttons=await build_admin_keyboard(), link_preview=False))
                     return
                 except Exception as e:
                     logger.error(f"Error adding target channel {channel_input}: {e}")
@@ -871,7 +912,7 @@ async def admin_private_handler(event):
                     await add_channel(channel_id, channel_username, channel_title, "source")
                     await event.reply(f"✅ Source channel {channel_title} ({channel_id}) added.")
                     await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                                    buttons=build_admin_keyboard(), link_preview=False))
+                                                                    buttons=await build_admin_keyboard(), link_preview=False))
                     return
                 except Exception as e:
                     logger.error(f"Error adding source channel {channel_input}: {e}")
@@ -895,7 +936,7 @@ async def admin_private_handler(event):
                 await set_bot_setting("custom_gif", link)
                 await event.reply("✅ GIF URL updated.")
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                                buttons=build_admin_keyboard(), link_preview=False))
+                                                                buttons=await build_admin_keyboard(), link_preview=False))
                 return
         except Exception as e:
             logger.error(f"Error handling admin input for user {uid}, action {act}: {e}")
@@ -903,12 +944,12 @@ async def admin_private_handler(event):
             pending_input.pop(uid, None)
             try:
                 await retry_telethon_call(bot_client.send_message(uid, "⚠ An error occurred. Returning to dashboard.",
-                                                                buttons=build_admin_keyboard(), link_preview=False))
+                                                                buttons=await build_admin_keyboard(), link_preview=False))
             except Exception:
                 pass
     elif txt.lower() in ('/start', 'start'):
         await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
-                                                        buttons=build_admin_keyboard(), link_preview=False))
+                                                        buttons=await build_admin_keyboard(), link_preview=False))
     else:
         pass
 
@@ -1022,6 +1063,8 @@ async def channel_handler(event):
         new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
+        # X için buton URL'lerini ekle
+        new_text_for_x = new_text + f"\n\n📈 Chart: https://dexscreener.com/solana/{contract}\n🛡 Trojan: https://t.me/solana_trojanbot?start=r-gemwagmi0001"
         target_channels = await get_channels('target')
         if not target_channels:
             logger.warning("No target channels configured to send new call announcement.")
@@ -1031,7 +1074,6 @@ async def channel_handler(event):
             target_channel_id = target_channel_info["channel_id"]
             try:
                 logger.info(f"Sending new call announcement for '{token_name}' ({contract}) to target channel ID: {target_channel_id}.")
-                # Metin ve yeni GIF'i tek mesajda gönder
                 msg = await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=new_text,
@@ -1039,6 +1081,7 @@ async def channel_handler(event):
                     buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
+                await post_to_x(new_text_for_x, media_url='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif')  # X'e gönder
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
@@ -1167,15 +1210,23 @@ async def get_admin_dashboard():
         logger.error(f"Error fetching motivation quote for dashboard: {e}")
         mot = "Could not fetch motivation."
     bot_status = (await get_bot_setting("bot_status")) or "running"
+    x_posting_status = (await get_bot_setting("x_posting_enabled")) or "enabled"
     return (
         "👋 *Hey Boss!* 💎\n\n"
-        f"🤖 *Bot Status:* `{bot_status.capitalize()}`\n\n"
+        f"🤖 *Bot Status:* `{bot_status.capitalize()}`\n"
+        f"📱 *X Posting:* `{x_posting_status.capitalize()}`\n\n"  # X durumu eklendi
         f"💖 *Affirmation:* {aff}\n"
         f"🚀 *Motivation:* {mot}\n\n"
         "What would you like to do?"
     )
 
-def build_admin_keyboard():
+async def build_admin_keyboard():
+    x_posting_status = await get_bot_setting("x_posting_enabled") or "enabled"
+    x_posting_button = (
+        Button.inline("⏸ Pause X Posting", b"admin_pause_x_posting")
+        if x_posting_status == "enabled"
+        else Button.inline("▶ Start X Posting", b"admin_start_x_posting")
+    )
     return [
         [Button.inline("▶ Start Bot", b"admin_start"),
          Button.inline("⏸ Pause Bot", b"admin_pause"),
@@ -1183,7 +1234,8 @@ def build_admin_keyboard():
         [Button.inline("👤 Admins", b"admin_admins"),
          Button.inline("📅 Targets", b"admin_targets"),
          Button.inline("📡 Sources", b"admin_sources")],
-        [Button.inline("🎬 Update GIF", b"admin_update_gif")]
+        [Button.inline("🎬 Update GIF", b"admin_update_gif"),
+         x_posting_button]  # X butonu eklendi
     ]
 
 async def main():
