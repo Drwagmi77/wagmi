@@ -17,20 +17,20 @@ from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
 import tweepy  # X API için eklendi
 
-# Ortam değişkenleri
+# Ortam değişkenleri (sabit değerler kaldırıldı)
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
-DB_PASS = os.environ.get("DB_PASS", 
-DB_HOST = os.environ.get("DB_HOST", 
-DB_PORT = os.environ.get("DB_PORT", 
-API_ID = int(os.environ.get("API_ID", 
-API_HASH = os.environ.get("API_HASH", 
-BOT_TOKEN = os.environ.get("BOT_TOKEN") 
+DB_PASS = os.environ.get("DB_PASS")
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = os.environ.get("DB_PORT")
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
-X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY", 
-X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET", 
-X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", 
-X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", t
+X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY")
+X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
+X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
+X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
 
 # X API bağlantısı
 auth = tweepy.OAuthHandler(X_CONSUMER_KEY, X_CONSUMER_SECRET)
