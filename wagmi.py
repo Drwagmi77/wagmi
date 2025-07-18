@@ -20,17 +20,17 @@ import tweepy  # X API için eklendi
 # Ortam değişkenleri
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
-DB_PASS = os.environ.get("DB_PASS", "Rz2yaYvgWNdifqFsxwVSFz4u8lcJeqMZ")
-DB_HOST = os.environ.get("DB_HOST", "dpg-d1e7cth5pdvs73fkod70-a.oregon-postgres.render.com")
-DB_PORT = os.environ.get("DB_PORT", "5432")
-API_ID = int(os.environ.get("API_ID", 28146969))
-API_HASH = os.environ.get("API_HASH", '5c8acdf2a7358589696af178e2319443')
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Yeni token: 7608256793:AAHm8lwZfxKB_0djzyiBRRQxKM34JsdpDlQ
+DB_PASS = os.environ.get("DB_PASS", 
+DB_HOST = os.environ.get("DB_HOST", 
+DB_PORT = os.environ.get("DB_PORT", 
+API_ID = int(os.environ.get("API_ID", 
+API_HASH = os.environ.get("API_HASH", 
+BOT_TOKEN = os.environ.get("BOT_TOKEN") 
 SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
-X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY", "oh0FELsqrpjPD0wypGTBFhvSv")  # X API Key
-X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET", "UE9Y4jL6dhFPBZlVuG3tM5rmBrxLrLqMwUVScJ9nh6yvNuBwfx")  # X API Secret
-X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "1329104293568385026-ouINv6qxi6ZP7G8Eu1KZ8oIWIBEBiq")  # X Access Token
-X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "TBB1q1iDRi6DQ8a8Om7F3vpqvxbtjLIKLYlsfF0GE30ph")  # X Access Token Secret
+X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY", 
+X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET", 
+X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", 
+X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", t
 
 # X API bağlantısı
 auth = tweepy.OAuthHandler(X_CONSUMER_KEY, X_CONSUMER_SECRET)
