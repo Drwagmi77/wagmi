@@ -21,7 +21,7 @@ import tweepy  # X API için eklendi
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
 DB_PASS = os.environ.get("DB_PASS")
-DB_HOST = os.environ.get("DB_HOST")
+DB_HOST = os.environ.get("DB_HOST").strip()
 DB_PORT = os.environ.get("DB_PORT")
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
