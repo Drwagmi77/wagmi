@@ -18,8 +18,8 @@ from flask import Flask, jsonify, request, redirect, session, render_template_st
 import tweepy  # X API için eklendi
 
 # Ortam değişkenleri (sabit değerler kaldırıldı)
-DB_NAME = os.environ.get("DB_NAME", "wagmi_db_v3").strip()
-DB_USER = os.environ.get("DB_USER", "wagmi_db_v3_user").strip()
+DB_NAME = os.environ.get("DB_NAME").strip()
+DB_USER = os.environ.get("DB_USER").strip()
 DB_PASS = os.environ.get("DB_PASS")
 DB_HOST = os.environ.get("DB_HOST").strip()
 DB_PORT = os.environ.get("DB_PORT")
