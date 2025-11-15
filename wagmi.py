@@ -1329,7 +1329,7 @@ async def main():
         logger.error("Bot lacks admin rights in one or more target channels. Posting might fail.")
     else:
         logger.info("Bot has admin rights in all configured target channels.")
-    logger歡.info("Bot is now running in the asyncio event loop.")
+    logger.info("Bot is now running in the asyncio event loop.")
     await asyncio.Event().wait()
 
 if __name__ == '__main__':
