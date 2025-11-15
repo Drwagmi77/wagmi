@@ -41,21 +41,19 @@ app.secret_key = SECRET_KEY
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
-# ====================== X PAYLAŞIM FONKSİYONU (BUTONSUZ, SADECE YENİ SİNYAL) ======================
-def post_to_x(message, media_url=None):
+# ====================== PİPEDREAM KODU - %100 AYNI ======================
+def post_to_x(message):
     x_posting_enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
     if x_posting_enabled != "enabled":
         logger.info("X paylaşımı devre dışı.")
         return
 
-    if len(message) > 280:
-        message = message[:277] + "..."
-
-    # BUTONLARI VE MARKDOWN'U TEMİZLE
-    clean_text = re.sub(r"\[.*?\]\(.*?\)", "", message)  # Buton linkleri
-    clean_text = re.sub(r"[\*\_`\[\]]", "", clean_text)   # Markdown
-    clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)    # Boş satırları azalt
-    clean_text = clean_text.strip()
+    text = (message or "").strip()
+    if not text:
+        logger.warning("X'e gönderilecek mesaj boş.")
+        return
+    if len(text) > 280:
+        text = text[:277] + "..."
 
     url = "https://api.twitter.com/2/tweets"
     method = "POST"
@@ -63,45 +61,44 @@ def post_to_x(message, media_url=None):
     oauth_params = {
         "oauth_consumer_key": X_CONSUMER_KEY,
         "oauth_token": X_ACCESS_TOKEN,
-        "oauth_nonce": base64.b64encode(os.urandom(32)).decode()[:32],
+        "oauth_nonce": base64.b64encode(os.urandom(16)).decode('utf-8'),
         "oauth_timestamp": str(int(time.time())),
         "oauth_signature_method": "HMAC-SHA1",
         "oauth_version": "1.0"
     }
 
-    payload = {"text": clean_text}
-
-    sorted_params = "&".join([
+    param_string = "&".join([
         f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
         for k, v in sorted(oauth_params.items())
     ])
-    base_string = f"{method}&{urllib.parse.quote(url, safe='')}&{urllib.parse.quote(sorted_params, safe='')}"
+
+    base_string = f"{method}&{urllib.parse.quote(url, safe='')}&{urllib.parse.quote(param_string, safe='')}"
     signing_key = f"{urllib.parse.quote(X_CONSUMER_SECRET, safe='')}&{urllib.parse.quote(X_ACCESS_TOKEN_SECRET or '', safe='')}"
     hashed = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1)
     signature = base64.b64encode(hashed.digest()).decode()
     oauth_params["oauth_signature"] = signature
 
     auth_header = "OAuth " + ", ".join([
-        f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in oauth_params.items()
+        f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in sorted(oauth_params.items())
     ])
 
     try:
         response = requests.post(
-            url,
+            url=url,
             headers={
                 "Authorization": auth_header,
                 "Content-Type": "application/json",
                 "User-Agent": "GemWagmiBot/1.0"
             },
-            json=payload
+            json={"text": text}
         )
         if response.status_code == 201:
-            logger.info(f"X'e BUTONSUZ paylaşıldı: {clean_text[:50]}...")
+            logger.info(f"Tweet atıldı: {len(text)} karakter → {text[:50]}...")
         else:
-            logger.error(f"X paylaşım hatası: {response.status_code} {response.text}")
+            logger.error(f"X API Hatası: {response.status_code} {response.text}")
     except Exception as e:
         logger.error(f"X paylaşım hatası: {e}")
-# ===============================================================================
+# =====================================================================
 
 def get_connection():
     try:
@@ -520,7 +517,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-logger.info("Logging setup complete. Bot is starting...")
 
 async def retry_telethon_call(coro, max_retries=5, base_delay=1.0):
     for i in range(max_retries):
@@ -546,15 +542,12 @@ def extract_contract(text: str) -> str | None:
 def extract_token_name_from_source(text: str) -> str:
     lines = text.strip().splitlines()
     if not lines:
-        logger.debug("Empty message received for token extraction; returning 'unknown'.")
         return "unknown"
     for line in lines:
         match = re.search(r"\$([A-Za-z0-9_]+)", line)
         if match:
             token = match.group(1)
-            logger.debug(f"Token extracted: '{token}' from line: '{line}'")
             return token
-    logger.debug("No valid token ($WORD) found in the message; returning 'unknown'.")
     return "unknown"
 
 def parse_tff_output(text: str) -> dict:
@@ -562,7 +555,6 @@ def parse_tff_output(text: str) -> dict:
     data["mint_status"] = (re.search(r"Mint:\s*(\w+)", text) or [None, "N/A"])[1]
     data["liquidity_status"] = (re.search(r"Liq:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
     data["market_cap"] = (re.search(r"MC:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
-    logger.debug("Parsed TFF output.")
     return data
 
 def build_new_template(token_name, contract, market_cap, liquidity_status, mint_status):
@@ -573,31 +565,37 @@ def build_new_template(token_name, contract, market_cap, liquidity_status, mint_
         f"*Liquidity:* {liquidity_status}\n"
         f"*Minting:* {mint_status}\n\n"
         f"*Contract:* `{contract}`\n"
-        "*Network:* #SOL"
+        f"*Network:* #SOL"
     )
 
-def build_update_template(token_name, old_mc, new_mc, prof):
-    old_mc_num = float(old_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
-    new_mc_num = float(new_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
-    multiplier = new_mc_num / old_mc_num
-    profit_percent = (multiplier - 1) * 100
+def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
     return (
-        f"${token_name}\n"
-        f"{multiplier:.2f}x\n"
-        f"MC: ${old_mc} -> ${new_mc}\n"
-        f"{profit_percent:.0f}% PROFIT\n"
-        "WAGMI — We All Gonna Make It!"
+        f"New GEM Landed!\n\n"
+        f"${token_name.upper()}\n\n"
+        f"Market Cap:* {market_cap}\n"
+        f"Liquidity:* {liquidity_status}\n"
+        f"Minting:* {mint_status}\n\n"
+        f"Contract: {contract}\n"
+        f"Network: #SOL\n\n"
+        f"Join our AI-powered Telegram group:\n"
+        f"https://t.me/wagmi100xgem"
     )
 
 def build_announcement_buttons(contract):
     return [
-        [Button.url("Chart", f"https://dexscreener.com/solana/{contract}"),
-         Button.url("Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi0001")],
-        [Button.url("Soul", "https://t.me/soul_sniper_bot?start=WpQErcIT5oHr"),
-         Button.url("MEVX", "https://t.me/Mevx?start=wN17b0M1lsJs")],
-        [Button.url("Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}")],
-        [Button.url("Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
-         Button.url("GMGN", f"https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC")]
+        [
+            Button.url("Chart", f"https://dexscreener.com/solana/{contract}"),
+            Button.url("Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi0001"),
+            Button.url("Soul", "https://t.me/soul_sniper_bot?start=WpQErcIT5oHr"),
+            Button.url("MEVX", "https://t.me/Mevx?start=wN17b0M1lsJs")
+        ],
+        [
+            Button.url("Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}"),
+            Button.url("Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
+            Button.url("GMGN", f"https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC"),
+            Button.url("Padre", "https://trade.padre.gg/rk/gemwagmi")
+        ],
+        [Button.url("Axiom", "https://axiom.trade/@gemwagmi")]
     ]
 
 pending_input = {}
@@ -847,8 +845,22 @@ async def admin_private_handler(event):
         logger.warning(f"Unauthorized private message from user ID: {uid}")
         return
 
-    txt = event.raw_text.strip()
+    txt = event.raw_text.strip().lower()
     logger.info(f"Admin {uid} sent private message: {txt}")
+
+    # YENİ X KONTROL KOMUTLARI
+    if txt == "x pause":
+        await set_bot_setting("x_posting_enabled", "disabled")
+        await event.reply("X paylaşımı durduruldu.")
+        return
+    elif txt == "x start":
+        await set_bot_setting("x_posting_enabled", "enabled")
+        await event.reply("X paylaşımı başlatıldı.")
+        return
+    elif txt == "x status":
+        status = await get_bot_setting("x_posting_enabled") or "enabled"
+        await event.reply(f"X paylaşımı: {status.capitalize()}")
+        return
 
     if uid in pending_input:
         act = pending_input.pop(uid)['action']
@@ -1105,12 +1117,14 @@ async def channel_handler(event):
                     target_channel_id,
                     message=new_text,
                     file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdVZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
-                    buttons=buttons  # GRUBA BUTON EKLE
+                    buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-                # SADECE YENİ SİNYALDE X'E GÖNDER (BUTONSUZ)
+                # SADECE YENİ SİNYAL → X'E GÖNDER
                 if "New GEM Landed!" in new_text:
-                    post_to_x(new_text)
+                    x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'),
+                                          data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
+                    post_to_x(x_text)
                 else:
                     logger.info("Update mesajı → X'e gönderilmedi.")
                 await retry_telethon_call(bot_client.send_message(
@@ -1315,7 +1329,7 @@ async def main():
         logger.error("Bot lacks admin rights in one or more target channels. Posting might fail.")
     else:
         logger.info("Bot has admin rights in all configured target channels.")
-    logger.info("Bot is now running in the asyncio event loop.")
+    logger歡.info("Bot is now running in the asyncio event loop.")
     await asyncio.Event().wait()
 
 if __name__ == '__main__':
