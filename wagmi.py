@@ -557,15 +557,13 @@ def parse_tff_output(text: str) -> dict:
     data["market_cap"] = (re.search(r"MC:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
     return data
 
-def build_new_template(token_name, contract, market_cap, liquidity_status, mint_status):
+def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_status, mint_status):
     return (
-        "*New GEM Landed!*\n\n"
-        f"${token_name.upper()}\n\n"
+        "🚀 *New GEM Landed!* 💎\n\n"  # Emojiler eklendi
+        f"💰 ${token_name.upper()}\n\n"
         f"*Market Cap:* {market_cap}\n"
-        f"*Liquidity:* {liquidity_status}\n"
-        f"*Minting:* {mint_status}\n\n"
-        f"*Contract:* `{contract}`\n"
-        f"*Network:* #SOL"
+        f"📝 *Contract:* `{contract}`\n"
+        f"🔗 *Network:* #SOL"
     )
 
 def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
