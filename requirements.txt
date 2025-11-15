@@ -5,4 +5,4 @@ requests
 hypercorn
 asgiref
 Pillow
-
+tweepy
