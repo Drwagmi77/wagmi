@@ -568,13 +568,11 @@ def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_st
 
 def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
     return (
-        f"New GEM Landed!\n\n"
-        f"${token_name.upper()}\n\n"
-        f"Market Cap:* {market_cap}\n"
-        f"Liquidity:* {liquidity_status}\n"
-        f"Minting:* {mint_status}\n\n"
-        f"Contract: {contract}\n"
-        f"Network: #SOL\n\n"
+        "🚀 *New GEM Landed!* 💎\n\n"  # Emojiler eklendi
+        f"💰 ${token_name.upper()}\n\n"
+        f"*Market Cap:* {market_cap}\n"
+        f"📝 *Contract:* `{contract}`\n"
+        f"🔗 *Network:* #SOL"
         f"Join our AI-powered Telegram group:\n"
         f"https://t.me/wagmi100xgem"
     )
