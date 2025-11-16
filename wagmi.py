@@ -1207,9 +1207,6 @@ async def channel_handler(event):
         else:
             await add_token_mapping(token_name.lower(), contract, None)
             logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}).")
-        else:
-            await add_token_mapping(token_name.lower(), contract, None)
-            logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}). Mapping stored without announcement ID.")
     else:
         logger.warning(f"TTF bot did not return a message or message was empty for contract {contract} from message {message_id}. Cannot announce.")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot returned empty message for contract: `{contract}` (from message {message_id} in {chat_id}). Cannot announce."))
