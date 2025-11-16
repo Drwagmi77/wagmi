@@ -1149,7 +1149,7 @@ async def channel_handler(event):
         return
         if ttf_response and ttf_response.raw_text:
         # GÖRSEL AL
-        source_media = event.message.media
+            source_media = event.message.media
         if source_media:
             logger.info(f"Kaynak görsel bulundu → {source_media.__class__.__name__}")
         else:
