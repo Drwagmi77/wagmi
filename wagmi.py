@@ -830,6 +830,7 @@ async def admin_callback_handler(event):
             pending_input[uid] = {'action': 'confirm_update_gif'}
             return await event.edit("*Update GIF*\n\nSend me the new GIF URL:",
                                    buttons=[[Button.inline("Back", b"admin_home")]], link_preview=False)
+
     except Exception as e:
         logger.error(f"Error in admin callback handler for user {uid}, data {data}: {e}")
         await event.answer("An error occurred.", alert=True)
@@ -839,7 +840,8 @@ async def admin_callback_handler(event):
         except Exception:
             pass
 
-await event.answer("Done")
+    # FONKSİYON İÇİNDE → DOĞRU
+    await event.answer("Done")
 
 @bot_client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def admin_private_handler(event):
