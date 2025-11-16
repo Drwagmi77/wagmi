@@ -563,7 +563,7 @@ def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_st
         f" ${token_name.upper()}\n\n"
         f" 💰Market Cap: {market_cap}\n"
         f"📝 *Contract:* `{contract}`\n"
-        f"🔗 *Network:* #SOL"
+        f"🔗 *Network:* #SOL\n\n"
     )
 
 def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
@@ -572,7 +572,7 @@ def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status
         f" ${token_name.upper()}\n\n"
         f"💰 Market Cap: {market_cap}\n"
         f"📝 *Contract:* `{contract}`\n"
-        f"🔗 *Network:* #SOL"
+        f"🔗 *Network:* #SOL\n\n"
         f" Join our AI-powered Telegram group:\n"
         f"https://t.me/wagmi100xgem"
     )
