@@ -583,7 +583,7 @@ def build_update_template(token_name, old_mc, new_mc, profit):
    return (
         f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
         f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
-        f"🔥 {prof} & STILL RUNNING! 💎\n\n"
+        f"🔥 {profit} & STILL RUNNING! 💎\n\n"
         "Stay sharp for the next hidden GEM! 💎"
     )
 
