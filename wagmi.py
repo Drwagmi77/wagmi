@@ -605,10 +605,10 @@ def build_x_text(token_name, contract, market_cap, liquidity_status=None, mint_s
 
     headers = [
         f"New GEM: ${token_name.upper()}",
-        f"🚀 Early: ${token_name.upper()}",
-        f"💵 AI Found: ${token_name.upper()}",
-        f"🔥Fresh SOL: ${token_name.upper()} MC {market_cap}",
-        f"💎 Hidden Gem: ${token_name.upper()}",
+        f"🚀 Early New GEM: ${token_name.upper()}",
+        f"💵 AI Found New GEM: ${token_name.upper()}",
+        f"🔥Fresh SOL New GEM: ${token_name.upper()} MC {market_cap}",
+        f"💎 Hidden New Gem: ${token_name.upper()}",
     ]
     header = random.choice(headers)
     full_ca = f"`{contract}`"
