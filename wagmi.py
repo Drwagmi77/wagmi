@@ -570,7 +570,7 @@ def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_st
 
 def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
     return (
-        "🚀 New GEM Landed! 💎\n\n"  # Emojiler eklendi
+        "🚀 *New 💎 GEM Landed!* 💎\n\n"
         f" ${token_name.upper()}\n\n"
         f"💰 Market Cap: {market_cap}\n"
         f"📝 *Contract:* `{contract}`\n"
