@@ -839,7 +839,7 @@ async def admin_callback_handler(event):
         except Exception:
             pass
 
-    await event.answer("Done" if not event.answered else "")
+await event.answer("Done")
 
 @bot_client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def admin_private_handler(event):
