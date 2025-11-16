@@ -590,18 +590,18 @@ def build_update_template(token_name, old_mc, new_mc, profit):
 def build_announcement_buttons(contract):
     return [
         [
-            Button.url("Chart", f"https://dexscreener.com/solana/{contract}"),
-            Button.url("Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi0001"),
-            Button.url("Soul", "https://t.me/soul_sniper_bot?start=WpQErcIT5oHr"),
-            Button.url("MEVX", "https://t.me/Mevx?start=wN17b0M1lsJs")
+            Button.url("📈 Chart", f"https://dexscreener.com/solana/{contract}"),
+            Button.url("🛡 Trojan", "https://t.me/solana_trojanbot?start=r-gemwagmi0001"),
+            Button.url("🐉 Soul", "https://t.me/soul_sniper_bot?start=WpQErcIT5oHr"),
+            Button.url("🤖 MEVX", "https://t.me/Mevx?start=wN17b0M1lsJs")
         ],
         [
-            Button.url("Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}"),
-            Button.url("Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
-            Button.url("GMGN", f"https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC"),
-            Button.url("Padre", "https://trade.padre.gg/rk/gemwagmi")
+            Button.url("🌐Algora", f"https://t.me/algoratradingbot?start=r-tff-{contract}"),
+            Button.url("🚀 Trojan N", f"https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}"),
+            Button.url("🔗 GMGN", f"https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC"),
+            Button.url("💎 Padre", "https://trade.padre.gg/rk/gemwagmi")
         ],
-        [Button.url("Axiom", "https://axiom.trade/@gemwagmi")]
+        [Button.url("🔥Axiom", "https://axiom.trade/@gemwagmi")]
     ]
 
 pending_input = {}
