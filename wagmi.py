@@ -577,6 +577,14 @@ def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status
         f"https://t.me/wagmi100xgem"
     )
 
+def build_update_template(token_name, old_mc, new_mc, profit):
+    return (
+        f"UPDATE | ${token_name.upper()}\n\n"
+        f"Old MC: {old_mc} → New MC: {new_mc}\n"
+        f"Profit: +{profit}%\n"
+        f"Keep holding! 🚀"
+    )
+
 def build_announcement_buttons(contract):
     return [
         [
@@ -1097,7 +1105,7 @@ async def channel_handler(event):
         if token_name == "unknown":
             logger.warning(f"Could not extract token name from source message {message_id} for contract {contract}. Using 'UNKNOWN'.")
             token_name = "UNKNOWN"
-        new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
+        new_text = build_new_template_with_emoji(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
         target_channels = await get_channels('target')
