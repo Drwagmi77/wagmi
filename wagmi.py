@@ -1142,28 +1142,29 @@ async def channel_handler(event):
         logger.error(f"TTF bot error for contract {contract} (from message {message_id}): {e}")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
         return
-    if ttf_response and ttf_response.raw_text:
-                # GÖRSEL AL
+      if ttf_response and ttf_response.raw_text:
+        # GÖRSEL AL
         source_media = event.message.media
         if source_media:
             logger.info(f"Kaynak görsel bulundu → {source_media.__class__.__name__}")
         else:
             logger.info("Kaynak mesajda görsel YOK → Sabit GIF kullanılır.")
-        logger.info(f"Parsing TFF bot output for contract {contract}: {ttf_response.raw_text[:100]}...")
+
         data = parse_tff_output(ttf_response.raw_text)
         token_name = extract_token_name_from_source(txt)
         if token_name == "unknown":
-            logger.warning(f"Could not extract token name from source message {message_id} for contract {contract}. Using 'UNKNOWN'.")
             token_name = "UNKNOWN"
+
         new_text = build_new_template_with_emoji(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
+
         target_channels = await get_channels('target')
         if not target_channels:
             logger.warning("No target channels configured to send new call announcement.")
             return
+
         announcement_id = None
-               
         for target_channel_info in target_channels:
             target_channel_id = target_channel_info["channel_id"]
             try:
@@ -1173,11 +1174,11 @@ async def channel_handler(event):
                 msg = await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=new_text,
-                    file=source_media or 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdVZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdT1n/U4Go851LRU7icahyaj/giphy.gif',
+                    file=source_media or 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdVZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
                     buttons=buttons
                 ))
 
-                # X'E GÖRSELLİ TWEET AT
+                # X'E GÖRSELLİ TWEET AT (SADECE 1 KEZ!)
                 x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'))
                 post_to_x(x_text, media=source_media)
 
@@ -1190,34 +1191,17 @@ async def channel_handler(event):
                 if announcement_id is None:
                     announcement_id = msg.id
 
+                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
+
             except Exception as e:
                 logger.error(f"Gönderim hatası (target: {target_channel_id}): {e}")
 
-                # X'E GÖRSELLİ TWEET
-                x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'))
-                post_to_x(x_text, media=source_media)
-                    target_channel_id,
-                    message=new_text,
-                    file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdVZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
-                    buttons=buttons
-                ))
-                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-                # X PAYLAŞIMI: YENİ SİNYALDE HER ZAMAN (metne bağlı değil)
-                x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'))
-                post_to_x(x_text)
-
-                await retry_telethon_call(bot_client.send_message(
-                    target_channel_id,
-                    message=contract
-                ))
-                logger.info(f"Contract address '{contract}' sent as separate message to {target_channel_id}.")
-                if announcement_id is None:
-                    announcement_id = msg.id
-            except Exception as e:
-                logger.error(f"Error sending new call announcement or contract to target {target_channel_id} for contract {contract}: {e}")
         if announcement_id is not None:
             await add_token_mapping(token_name.lower(), contract, announcement_id)
             logger.info(f"Recorded mapping for '{token_name}' -> {contract} with announcement ID {announcement_id}.")
+        else:
+            await add_token_mapping(token_name.lower(), contract, None)
+            logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}).")
         else:
             await add_token_mapping(token_name.lower(), contract, None)
             logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}). Mapping stored without announcement ID.")
