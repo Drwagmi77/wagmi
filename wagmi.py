@@ -620,12 +620,17 @@ def build_x_text(token_name, contract, market_cap, liquidity_status=None, mint_s
     asyncio.create_task(set_bot_setting("x_post_counter", str(x_post_counter)))
     return text
 
-def build_update_template(token_name, old_mc, new_mc, profit):
-   return (
-        f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
-        f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
-        f"🔥 {profit} & STILL RUNNING! 💎\n\n"
-        "Stay sharp for the next hidden GEM! 💎"
+def build_update_template(token_name, old_mc, new_mc, prof):
+    old_mc_num = float(old_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
+    new_mc_num = float(new_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
+    multiplier = new_mc_num / old_mc_num
+    profit_percent = (multiplier - 1) * 100
+    return (
+        f"🚀 ${token_name}\n"
+        f"{multiplier:.2f}x ✅\n"
+        f"💵 MC: ${old_mc} ➡️ ${new_mc}\n"
+        f"🔥 {profit_percent:.0f}% PROFIT 🔥\n"
+        "🚀 WAGMI — We All Gonna Make It!"
     )
 
 def build_announcement_buttons(contract):
@@ -1142,7 +1147,7 @@ async def channel_handler(event):
         logger.error(f"TTF bot error for contract {contract} (from message {message_id}): {e}")
         await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
         return
-      if ttf_response and ttf_response.raw_text:
+        if ttf_response and ttf_response.raw_text:
         # GÖRSEL AL
         source_media = event.message.media
         if source_media:
