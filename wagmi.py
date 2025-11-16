@@ -558,12 +558,14 @@ def parse_tff_output(text: str) -> dict:
     return data
 
 def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_status, mint_status):
-    return (
-        "🚀 New GEM Landed! 💎\n\n"  # Emojiler eklendi
-        f" ${token_name.upper()}\n\n"
-        f" 💰Market Cap: {market_cap}\n"
-        f"📝 *Contract:* `{contract}`\n"
-        f"🔗 *Network:* #SOL\n\n"
+   return (
+        "🚀 *New 💎 GEM Landed!* 💎\n\n"
+        f"💰 ${token_name.upper()}\n\n"
+        f"📊 *Market Cap:* {market_cap}\n"
+        f"💦 *Liquidity:* {liquidity_status}\n"
+        f"🔥 *Minting:* {mint_status}\n\n"
+        f"🔗 *Contract:* `{contract}`\n"
+        "🌐 *Network:* #SOL"
     )
 
 def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
@@ -578,11 +580,11 @@ def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status
     )
 
 def build_update_template(token_name, old_mc, new_mc, profit):
-    return (
-        f"UPDATE | ${token_name.upper()}\n\n"
-        f"Old MC: {old_mc} → New MC: {new_mc}\n"
-        f"Profit: +{profit}%\n"
-        f"Keep holding! 🚀"
+   return (
+        f"🚀 *Early GEM Hunters Winning Big!* 💎\n\n"
+        f"💵 *{token_name.upper()}* Market Cap: {new_mc} 💎\n"
+        f"🔥 {prof} & STILL RUNNING! 💎\n\n"
+        "Stay sharp for the next hidden GEM! 💎"
     )
 
 def build_announcement_buttons(contract):
