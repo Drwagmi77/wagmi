@@ -507,6 +507,9 @@ DEFAULT_BOT_SETTINGS = {
     "x_posting_enabled": "enabled"
 }
 
+# <--- YENİ: X sayacı (global)
+x_post_counter = 0
+
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -568,16 +571,27 @@ def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_st
         "🌐 *Network:* #SOL"
     )
 
-def build_x_text(token_name, contract, market_cap, liquidity_status, mint_status):
-    return (
-        "🚀 *New 💎 GEM Landed!* 💎\n\n"
-        f" ${token_name.upper()}\n\n"
-        f"💰 Market Cap: {market_cap}\n"
-        f"📝 *Contract:* `{contract}`\n"
-        f"🔗 *Network:* #SOL\n\n"
-        f" Join our AI-powered Telegram group:\n"
-        f"https://t.me/wagmi100xgem"
-    )
+# <--- YENİ: X metni (contract tam, başlık rastgele, link her 10'da 1)
+def build_x_text(token_name, contract, market_cap, liquidity_status=None, mint_status=None):
+    global x_post_counter
+    x_post_counter += 1
+
+    headers = [
+        f"New GEM: ${token_name.upper()}",
+        f"🚀 Early: ${token_name.upper()}",
+        f"💵 AI Found: ${token_name.upper()}",
+        f"🔥Fresh SOL: ${token_name.upper()} MC {market_cap}",
+        f"💎 Hidden Gem: ${token_name.upper()}",
+    ]
+    header = random.choice(headers)
+    full_ca = f"`{contract}`"
+
+    # Link sadece her 10. tweette
+    link = "\n\nAI Gems → t.me/wagmi100xgem" if x_post_counter % 10 == 0 else ""
+
+    text = f"{header}\n\nMC: {market_cap}\n{full_ca}\n#SOL{link}"
+    asyncio.create_task(set_bot_setting("x_post_counter", str(x_post_counter)))
+    return text
 
 def build_update_template(token_name, old_mc, new_mc, profit):
    return (
@@ -842,7 +856,6 @@ async def admin_callback_handler(event):
         except Exception:
             pass
 
-    # FONKSİYON İÇİNDE → DOĞRU
     await event.answer("Done")
 
 @bot_client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
@@ -1128,13 +1141,10 @@ async def channel_handler(event):
                     buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-                # SADECE YENİ SİNYAL → X'E GÖNDER
-                if "New GEM Landed!" in new_text:
-                    x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'),
-                                          data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
-                    post_to_x(x_text)
-                else:
-                    logger.info("Update mesajı → X'e gönderilmedi.")
+                # X PAYLAŞIMI: YENİ SİNYALDE HER ZAMAN (metne bağlı değil)
+                x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'))
+                post_to_x(x_text)
+
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
@@ -1218,7 +1228,7 @@ async def correct_last_announcement():
                 else:
                     logger.debug(f"No existing mapping found by announcement ID {last_msg.id} and message doesn't look like a new announcement in channel {ch['channel_id']}.")
         except Exception as e:
-            logger.error(f"Error correcting last announcement in channel {ch['channel_id']}: {e}")
+            logger.error(f"Error correcting  last announcement in channel {ch['channel_id']}: {e}")
     logger.info("Last announcement correction task finished.")
 
 async def check_bot_admin() -> bool:
@@ -1295,6 +1305,12 @@ async def main():
     logger.info("Starting main bot asynchronous tasks...")
     await init_db()
     logger.info("Database initialization complete.")
+
+    # <--- SAYAÇ OKU (yeniden başlatmada kaybolmasın)
+    counter = await get_bot_setting("x_post_counter")
+    global x_post_counter
+    x_post_counter = int(counter) if counter and counter.isdigit() else 0
+
     admins = await get_admins()
     if DEFAULT_ADMIN_ID not in admins:
         await add_admin(DEFAULT_ADMIN_ID, 'Default', is_default=True)
