@@ -127,51 +127,6 @@ def post_to_x(message, media=None):
         logger.error(f"X paylaşım hatası: {e}")
         return None
         
-  url = "https://api.twitter.com/2/tweets"
-    method = "POST"
-
-    oauth_params = {
-        "oauth_consumer_key": X_CONSUMER_KEY,
-        "oauth_token": X_ACCESS_TOKEN,
-        "oauth_nonce": base64.b64encode(os.urandom(16)).decode('utf-8'),
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_version": "1.0"
-    }
-
-    param_string = "&".join([
-        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
-        for k, v in sorted(oauth_params.items())
-    ])
-
-    base_string = f"{method}&{urllib.parse.quote(url, safe='')}&{urllib.parse.quote(param_string, safe='')}"
-    signing_key = f"{urllib.parse.quote(X_CONSUMER_SECRET, safe='')}&{urllib.parse.quote(X_ACCESS_TOKEN_SECRET or '', safe='')}"
-    hashed = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1)
-    signature = base64.b64encode(hashed.digest()).decode()
-    oauth_params["oauth_signature"] = signature
-
-    auth_header = "OAuth " + ", ".join([
-        f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in sorted(oauth_params.items())
-    ])
-
-    try:
-        response = requests.post(
-            url=url,
-            headers={
-                "Authorization": auth_header,
-                "Content-Type": "application/json",
-                "User-Agent": "GemWagmiBot/1.0"
-            },
-            json={"text": text}
-        )
-        if response.status_code == 201:
-            logger.info(f"Tweet atıldı: {len(text)} karakter → {text[:50]}...")
-        else:
-            logger.error(f"X API Hatası: {response.status_code} {response.text}")
-    except Exception as e:
-        logger.error(f"X paylaşım hatası: {e}")
-# =====================================================================
-
 def get_connection():
     try:
         return psycopg2.connect(
