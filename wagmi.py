@@ -24,6 +24,9 @@ import hmac
 import hashlib
 # Flask app tanımı (EKSİK OLAN BU!)
 app = Flask(__name__)
+# Telegram client'ları tanımla (BU EKSİK OLDUĞU İÇİN HATA ALIYORSUN)
+bot_client = TelegramClient('bot', API_ID, API_HASH)
+user_client = TelegramClient('user', API_ID, API_HASH)
 
 # Ortam değişkenleri (sabit değerler kaldırıldı)
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
