@@ -15,16 +15,13 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
-import hmac
-import hashlib
-import base64
-import urllib.parse
+import tweepy  # X API için eklendi
 
-# Ortam değişkenleri
-DB_NAME = os.environ.get("DB_NAME").strip()
-DB_USER = os.environ.get("DB_USER").strip()
+# Ortam değişkenleri (sabit değerler kaldırıldı)
+DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
+DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
 DB_PASS = os.environ.get("DB_PASS")
-DB_HOST = os.environ.get("DB_HOST").strip()
+DB_HOST = os.environ.get("DB_HOST")
 DB_PORT = os.environ.get("DB_PORT")
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
@@ -35,98 +32,39 @@ X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
 
+# X API bağlantısı
+auth = tweepy.OAuthHandler(X_CONSUMER_KEY, X_CONSUMER_SECRET)
+auth.set_access_token(X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
+x_api = tweepy.API(auth)
+
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
-def post_to_x(message, media=None):
-    x_posting_enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
+# X paylaşım fonksiyonu
+async def post_to_x(message, media_url=None):
+    x_posting_enabled = await get_bot_setting("x_posting_enabled") or "enabled"
     if x_posting_enabled != "enabled":
-        logger.info("X paylaşımı devre dışı.")
-        return None
-
-    text = (message or "").strip()
-    if not text:
-        logger.warning("X'e gönderilecek mesaj boş.")
-        return None
-    if len(text) > 280:
-        text = text[:277] + "..."
-
-    url = "https://api.twitter.com/2/tweets"
-    method = "POST"
-
-    oauth_params = {
-        "oauth_consumer_key": X_CONSUMER_KEY,
-        "oauth_token": X_ACCESS_TOKEN,
-        "oauth_nonce": base64.b64encode(os.urandom(16)).decode('utf-8'),
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_version": "1.0"
-    }
-
-    param_string = "&".join([
-        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
-        for k, v in sorted(oauth_params.items())
-    ])
-
-    base_string = f"{method}&{urllib.parse.quote(url, safe='')}&{urllib.parse.quote(param_string, safe='')}"
-    signing_key = f"{urllib.parse.quote(X_CONSUMER_SECRET, safe='')}&{urllib.parse.quote(X_ACCESS_TOKEN_SECRET or '', safe='')}"
-    hashed = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1)
-    signature = base64.b64encode(hashed.digest()).decode()
-    oauth_params["oauth_signature"] = signature
-
-    auth_header = "OAuth " + ", ".join([
-        f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in sorted(oauth_params.items())
-    ])
-
+        logger.info(f"X paylaşımı devre dışı, mesaj paylaşılmadı: {message[:100]}...")
+        return
     try:
-        media_id = None
-        if media:
-            file_path = f"temp_media_{int(time.time())}.jpg"
-            loop = asyncio.get_event_loop()
-            downloaded_path = loop.run_until_complete(
-                user_client.download_media(media, file=file_path)  # DOĞRU!
-            )
-            with open(downloaded_path, 'rb') as f:
-                upload_resp = requests.post(
-                    "https://upload.twitter.com/1.1/media/upload.json",
-                    headers={"Authorization": auth_header},
-                    files={'media': f}
-                )
-            os.remove(downloaded_path)
-            if upload_resp.status_code == 200:
-                media_id = upload_resp.json()['media_id_string']
-                logger.info(f"X'e görsel yüklendi: {media_id}")
-            else:
-                logger.error(f"Media upload hatası: {upload_resp.text}")
-
-        payload = {"text": text}
-        if media_id:
-            payload["media"] = {"media_ids": [media_id]}
-
-        response = requests.post(
-            url=url,
-            headers={
-                "Authorization": auth_header,
-                "Content-Type": "application/json",
-                "User-Agent": "GemWagmiBot/1.0"
-            },
-            json=payload
-        )
-
-        if response.status_code == 201:
-            tweet_id = response.json()['data']['id']
-            logger.info(f"Tweet atıldı (ID: {tweet_id}): {len(text)} karakter")
-            return tweet_id
+        if len(message) > 280:  # X karakter sınırı
+            message = message[:277] + "..."
+        if media_url:
+            response = requests.get(media_url)
+            response.raise_for_status()
+            media = response.content
+            x_api.update_status_with_media(status=message, filename="media.gif", file=media)
         else:
-            logger.error(f"X API Hatası: {response.status_code} {response.text}")
-            return None
-    except Exception as e:
+            x_api.update_status(status=message)
+        logger.info(f"X'te paylaşıldı: {message[:100]}...")
+    except tweepy.errors.TweepyException as e:
         logger.error(f"X paylaşım hatası: {e}")
-        return None
-        
+    except Exception as e:
+        logger.error(f"Medya indirme veya X paylaşım hatası: {e}")
+
 def get_connection():
     try:
         return psycopg2.connect(
@@ -146,6 +84,15 @@ def init_db_sync():
     try:
         conn = get_connection()
         with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id BIGINT PRIMARY KEY,
+                    first_name TEXT NOT NULL,
+                    last_name TEXT,
+                    lang TEXT,
+                    is_default BOOLEAN DEFAULT FALSE
+                );
+            """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS channels (
                     id SERIAL PRIMARY KEY,
@@ -524,18 +471,15 @@ DEFAULT_ADMIN_ID = int(os.environ.get("DEFAULT_ADMIN_ID", "7567322437"))
 DEFAULT_SOURCE_CHANNEL = {
     "channel_id": -1001998961899,
     "username": "@gem_tools_calls",
-    "title": "GemTools Calls",
+    "title": "💎 GemTools 💎 Calls",
     "channel_type": "source"
 }
-DEFAULT_TARGET_CHANNEL = json.loads(os.environ.get("DEFAULT_TARGET_CHANNEL", '{"channel_id": -1002829702089, "username": "", "title": "Wagmi Gem Hunter", "channel_type": "target"}'))
+DEFAULT_TARGET_CHANNEL = json.loads(os.environ.get("DEFAULT_TARGET_CHANNEL", '{"channel_id": -1002829702089, "username": "", "title": "Wagmi Gem Hunter 💎", "channel_type": "target"}'))
 DEFAULT_BOT_SETTINGS = {
     "bot_status": "running",
     "custom_gif": "https://dl.dropbox.com/scl/fi/u6r3x30cno1ebmvbpu5k1/video.mp4?rlkey=ytfk8qkdpwwm3je6hjcqgd89s&st=vxjkqe6c?dl=1",
-    "x_posting_enabled": "enabled"
+    "x_posting_enabled": "enabled"  # X paylaşımını kontrol etmek için eklendi
 }
-
-# <--- YENİ: X sayacı (global)
-x_post_counter = 0
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -547,6 +491,7 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+logger.info("🔥 Logging setup complete. Bot is starting...")
 
 async def retry_telethon_call(coro, max_retries=5, base_delay=1.0):
     for i in range(max_retries):
@@ -572,34 +517,27 @@ def extract_contract(text: str) -> str | None:
 def extract_token_name_from_source(text: str) -> str:
     lines = text.strip().splitlines()
     if not lines:
+        logger.debug("Empty message received for token extraction; returning 'unknown'.")
         return "unknown"
     for line in lines:
         match = re.search(r"\$([A-Za-z0-9_]+)", line)
         if match:
             token = match.group(1)
+            logger.debug(f"Token extracted: '{token}' from line: '{line}'")
             return token
+    logger.debug("No valid token ($WORD) found in the message; returning 'unknown'.")
     return "unknown"
 
 def parse_tff_output(text: str) -> dict:
     data = {}
-    
-    # MINT — hem eski (🌿 Mint: Enabled) hem yeni (Mint: Renounced / Enabled (locked) / Disabled)
-    mint_match = re.search(r"(?:🌿\s*)?Mint\s*:\s*([^\n\r,}]+)", text, re.IGNORECASE)
-    data["mint_status"] = mint_match.group(1).strip() if mint_match else "N/A"
-    
-    # LIQUIDITY — hem "Liq:" hem "Liquidity:" hem de boşluksuz/virgüllü
-    liq_match = re.search(r"Liq(?:uidity)?\s*[:：]?\s*\$?([\d\.,]+[KkMmBb]?)", text, re.IGNORECASE)
-    data["liquidity_status"] = liq_match.group(1).strip() if liq_match else "N/A"
-    
-    # MARKET CAP — hem "MC:" hem "Market Cap:" hem de boşluksuz
-    mc_match = re.search(r"(?:MC|Market\s+Cap)\s*[:：]?\s*\$?([\d\.,]+[KkMmBb]?)", text, re.IGNORECASE)
-    data["market_cap"] = mc_match.group(1).strip() if mc_match else "N/A"
-    
-    logger.debug(f"Parsed TFF output → MC: {data['market_cap']} | Liq: {data['liquidity_status']} | Mint: {data['mint_status']}")
+    data["mint_status"] = (re.search(r"🌿\s*Mint:\s*(\w+)", text) or [None, "N/A"])[1]
+    data["liquidity_status"] = (re.search(r"Liq:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
+    data["market_cap"] = (re.search(r"MC:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
+    logger.debug("✅ Parsed TFF output.")
     return data
 
-def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_status, mint_status):
-   return (
+def build_new_template(token_name, contract, market_cap, liquidity_status, mint_status):
+    return (
         "🚀 *New 💎 GEM Landed!* 💎\n\n"
         f"💰 ${token_name.upper()}\n\n"
         f"📊 *Market Cap:* {market_cap}\n"
@@ -608,28 +546,6 @@ def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_st
         f"🔗 *Contract:* `{contract}`\n"
         "🌐 *Network:* #SOL"
     )
-
-# <--- YENİ: X metni (contract tam, başlık rastgele, link her 10'da 1)
-def build_x_text(token_name, contract, market_cap, liquidity_status=None, mint_status=None):
-    global x_post_counter
-    x_post_counter += 1
-
-    headers = [
-        f"New GEM: ${token_name.upper()}",
-        f"🚀 Early New GEM: ${token_name.upper()}",
-        f"💵 AI Found New GEM: ${token_name.upper()}",
-        f"🔥Fresh SOL New GEM: ${token_name.upper()} MC {market_cap}",
-        f"💎 Hidden New Gem: ${token_name.upper()}",
-    ]
-    header = random.choice(headers)
-    full_ca = f"`{contract}`"
-
-    # Link sadece her 10. tweette
-    link = "\n\nAI Gems → t.me/wagmi100xgem" if x_post_counter % 10 == 0 else ""
-
-    text = f"{header}\n\nMC: {market_cap}\n{full_ca}\n#SOL{link}"
-    asyncio.create_task(set_bot_setting("x_post_counter", str(x_post_counter)))
-    return text
 
 def build_update_template(token_name, old_mc, new_mc, prof):
     old_mc_num = float(old_mc.replace('K', 'e3').replace('M', 'e6').replace('B', 'e9').replace(',', ''))
@@ -691,10 +607,10 @@ async def login():
         try:
             await user_client.connect()
             await user_client.send_code_request(phone)
-            logger.info(f"Sent login code request to {phone}")
+            logger.info(f"➡ Sent login code request to {phone}")
             return redirect('/submit-code')
         except Exception as e:
-            logger.error(f"Error sending login code to {phone}: {e}")
+            logger.error(f"❌ Error sending login code to {phone}: {e}")
             return f"<p>Error sending code: {e}</p>", 500
     return render_template_string(LOGIN_FORM)
 
@@ -711,11 +627,11 @@ async def submit_code():
             return "<p>Code is required.</p>", 400
         try:
             await user_client.sign_in(phone, code)
-            logger.info(f"Logged in user-client for {phone}")
+            logger.info(f"✅ Logged in user-client for {phone}")
             session.pop('phone', None)
             return "<p>Login successful! You can close this tab.</p>"
         except Exception as e:
-            logger.error(f"Login failed for {phone}: {e}")
+            logger.error(f"❌ Login failed for {phone}: {e}")
             return f"<p>Login failed: {e}</p>", 400
 
     return render_template_string(CODE_FORM)
@@ -734,7 +650,7 @@ async def admin_callback_handler(event):
     admins = await get_admins()
     if uid not in admins:
         logger.warning(f"Unauthorized callback query from user ID: {uid}")
-        return await event.answer("Not authorized")
+        return await event.answer("❌ Not authorized")
 
     data = event.data.decode()
     logger.info(f"Admin {uid} triggered callback: {data}")
@@ -745,151 +661,150 @@ async def admin_callback_handler(event):
                                    buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_start':
             await set_bot_setting("bot_status", "running")
-            await event.answer('Bot started')
+            await event.answer('▶ Bot started')
             return await event.edit(await get_admin_dashboard(),
                                    buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_pause':
             pending_input[uid] = {'action': 'pause'}
-            kb = [[Button.inline("Back", b"admin_home")]]
-            return await event.edit("*Pause Bot*\n\nHow many minutes should I pause for?",
+            kb = [[Button.inline("🔙 Back", b"admin_home")]]
+            return await event.edit("⏸ *Pause Bot*\n\nHow many minutes should I pause for?",
                                    buttons=kb, link_preview=False)
         if data == 'admin_stop':
             await set_bot_setting("bot_status", "stopped")
-            await event.answer('Bot stopped')
-            return await event.edit("*Bot has been shut down.*",
-                                   buttons=[[Button.inline("Restart Bot (set to running)", b"admin_start")],
-                                            [Button.inline("Back", b"admin_home")]],
+            await event.answer('🛑 Bot stopped')
+            return await event.edit("🛑 *Bot has been shut down.*",
+                                   buttons=[[Button.inline("🔄 Restart Bot (set to running)", b"admin_start")],
+                                            [Button.inline("🔙 Back", b"admin_home")]],
                                    link_preview=False)
         if data == 'admin_start_x_posting':
             await set_bot_setting("x_posting_enabled", "enabled")
-            await event.answer('X Posting started')
+            await event.answer('▶ X Posting started')
             return await event.edit(await get_admin_dashboard(),
                                    buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_pause_x_posting':
             await set_bot_setting("x_posting_enabled", "disabled")
-            await event.answer('X Posting paused')
+            await event.answer('⏸ X Posting paused')
             return await event.edit(await get_admin_dashboard(),
                                    buttons=await build_admin_keyboard(), link_preview=False)
         if data == 'admin_admins':
             admins = await get_admins()
             kb = [
-                [Button.inline("Add Admin", b"admin_add_admin")],
+                [Button.inline("➕ Add Admin", b"admin_add_admin")],
             ]
             removable_admins = {aid: info for aid, info in admins.items() if aid != DEFAULT_ADMIN_ID and not info.get("is_default")}
             if removable_admins:
-                kb.append([Button.inline("Remove Admin", b"admin_show_remove_admins")])
-            kb.append([Button.inline("Back", b"admin_home")])
-            return await event.edit("*Manage Admins*", buttons=kb, link_preview=False)
+                kb.append([Button.inline("🗑 Remove Admin", b"admin_show_remove_admins")])
+            kb.append([Button.inline("🔙 Back", b"admin_home")])
+            return await event.edit("👤 *Manage Admins*", buttons=kb, link_preview=False)
         if data == 'admin_show_remove_admins':
             admins = await get_admins()
             kb = []
             for aid, info in admins.items():
                 if aid != DEFAULT_ADMIN_ID and not info.get("is_default"):
                     kb.append([Button.inline(f"{info.get('first_name', 'N/A')} ({aid})", b"noop"),
-                              Button.inline("Remove", f"remove_admin:{aid}".encode())])
-            kb.append([Button.inline("Back", b"admin_admins")])
+                              Button.inline("❌ Remove", f"remove_admin:{aid}".encode())])
+            kb.append([Button.inline("🔙 Back", b"admin_admins")])
             if not kb:
-                return await event.edit("*No more removable admins.*",
-                                       buttons=[[Button.inline("Back", b"admin_admins")]], link_preview=False)
-            return await event.edit("*Select Admin to Remove*", buttons=kb, link_preview=False)
+                return await event.edit("🗑 *No more removable admins.*",
+                                       buttons=[[Button.inline("🔙 Back", b"admin_admins")]], link_preview=False)
+            return await event.edit("🗑 *Select Admin to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_add_admin':
             pending_input[uid] = {'action': 'confirm_add_admin'}
-            return await event.edit("*Add Admin*\n\nSend me the user ID to add:",
-                                   buttons=[[Button.inline("Back", b"admin_admins")]], link_preview=False)
+            return await event.edit("➕ *Add Admin*\n\nSend me the user ID to add:",
+                                   buttons=[[Button.inline("🔙 Back", b"admin_admins")]], link_preview=False)
         if data.startswith('remove_admin:'):
             aid = int(data.split(':')[1])
             await remove_admin(aid)
-            await event.answer("Admin removed", alert=True)
+            await event.answer("✅ Admin removed", alert=True)
             admins = await get_admins()
             kb = []
             for admin_id, info in admins.items():
                 if admin_id != DEFAULT_ADMIN_ID and not info.get("is_default"):
                     kb.append([Button.inline(f"{info.get('first_name', 'N/A')} ({admin_id})", b"noop"),
-                              Button.inline("Remove", f"remove_admin:{admin_id}".encode())])
-            kb.append([Button.inline("Back", b"admin_admins")])
+                              Button.inline("❌ Remove", f"remove_admin:{admin_id}".encode())])
+            kb.append([Button.inline("🔙 Back", b"admin_admins")])
             if not kb:
-                return await event.edit("*No more removable admins.*",
-                                       buttons=[[Button.inline("Back", b"admin_admins")]], link_preview=False)
-            return await event.edit("*Select Admin to Remove*", buttons=kb, link_preview=False)
+                return await event.edit("🗑 *No more removable admins.*",
+                                       buttons=[[Button.inline("🔙 Back", b"admin_admins")]], link_preview=False)
+            return await event.edit("🗑 *Select Admin to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_targets':
             kb = [
-                [Button.inline("Add Target", b"admin_add_target")],
+                [Button.inline("➕ Add Target", b"admin_add_target")],
             ]
             targets = await get_channels('target')
             if targets:
-                kb.append([Button.inline("Remove Target", b"admin_show_remove_targets")])
-            kb.append([Button.inline("Back", b"admin_home")])
-            return await event.edit("*Manage Target Channels*", buttons=kb, link_preview=False)
+                kb.append([Button.inline("🗑 Remove Target", b"admin_show_remove_targets")])
+            kb.append([Button.inline("🔙 Back", b"admin_home")])
+            return await event.edit("📺 *Manage Target Channels*", buttons=kb, link_preview=False)
         if data == 'admin_show_remove_targets':
             targets = await get_channels('target')
             kb = [
                 [Button.inline(ch.get('title', 'N/A'), b"noop"),
-                 Button.inline("Remove", f"remove_target:{ch['channel_id']}".encode())]
+                 Button.inline("❌ Remove", f"remove_target:{ch['channel_id']}".encode())]
                 for ch in targets
             ]
-            kb.append([Button.inline("Back", b"admin_targets")])
-            return await event.edit("*Select Target Channel to Remove*", buttons=kb, link_preview=False)
+            kb.append([Button.inline("🔙 Back", b"admin_targets")])
+            return await event.edit("🗑 *Select Target Channel to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_add_target':
             pending_input[uid] = {'action': 'confirm_add_target'}
-            return await event.edit("*Add Target Channel*\n\nSend me the channel ID (e.g., `-1001234567890`) or @username to add:",
-                                   buttons=[[Button.inline("Back", b"admin_targets")]], link_preview=False)
+            return await event.edit("➕ *Add Target Channel*\n\nSend me the channel ID (e.g., `-1001234567890`) or @username to add:",
+                                   buttons=[[Button.inline("🔙 Back", b"admin_targets")]], link_preview=False)
         if data.startswith('remove_target:'):
             tid = int(data.split(':')[1])
             await remove_channel(tid, "target")
-            await event.answer("Target channel removed", alert=True)
+            await event.answer("✅ Target channel removed", alert=True)
             targets = await get_channels('target')
             kb = [
                 [Button.inline(ch.get('title', 'N/A'), b"noop"),
-                 Button.inline("Remove", f"remove_target:{ch['channel_id']}".encode())]
+                 Button.inline("❌ Remove", f"remove_target:{ch['channel_id']}".encode())]
                 for ch in targets
             ]
-            kb.append([Button.inline("Back", b"admin_targets")])
+            kb.append([Button.inline("🔙 Back", b"admin_targets")])
             if not targets:
-                return await event.edit("*No more target channels.*",
-                                       buttons=[[Button.inline("Back", b"admin_targets")]], link_preview=False)
-            return await event.edit("*Select Target Channel to Remove*", buttons=kb, link_preview=False)
+                return await event.edit("🗑 *No more target channels.*",
+                                       buttons=[[Button.inline("🔙 Back", b"admin_targets")]], link_preview=False)
+            return await event.edit("🗑 *Select Target Channel to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_sources':
             kb = [
-                [Button.inline("Add Source", b"admin_add_source")],
+                [Button.inline("➕ Add Source", b"admin_add_source")],
             ]
             sources = await get_channels('source')
             if sources:
-                kb.append([Button.inline("Remove Source", b"admin_show_remove_sources")])
-            kb.append([Button.inline("Back", b"admin_home")])
-            return await event.edit("*Manage Source Channels*", buttons=kb, link_preview=False)
+                kb.append([Button.inline("🗑 Remove Source", b"admin_show_remove_sources")])
+            kb.append([Button.inline("🔙 Back", b"admin_home")])
+            return await event.edit("📡 *Manage Source Channels*", buttons=kb, link_preview=False)
         if data == 'admin_show_remove_sources':
             sources = await get_channels('source')
             kb = [
                 [Button.inline(ch.get('title', 'N/A'), b"noop"),
-                 Button.inline("Remove", f"remove_source:{ch['channel_id']}".encode())]
+                 Button.inline("❌ Remove", f"remove_source:{ch['channel_id']}".encode())]
                 for ch in sources
             ]
-            kb.append([Button.inline("Back", b"admin_sources")])
-            return await event.edit("*Select Source Channel to Remove*", buttons=kb, link_preview=False)
+            kb.append([Button.inline("🔙 Back", b"admin_sources")])
+            return await event.edit("🗑 *Select Source Channel to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_add_source':
             pending_input[uid] = {'action': 'confirm_add_source'}
-            return await event.edit("*Add Source Channel*\n\nSend me the channel ID (e.g., `-1001234567890`) or @username to add:",
-                                   buttons=[[Button.inline("Back", b"admin_sources")]], link_preview=False)
+            return await event.edit("➕ *Add Source Channel*\n\nSend me the channel ID (e.g., `-1001234567890`) or @username to add:",
+                                   buttons=[[Button.inline("🔙 Back", b"admin_sources")]], link_preview=False)
         if data.startswith('remove_source:'):
             sid = int(data.split(':')[1])
             await remove_channel(sid, "source")
-            await event.answer("Source channel removed", alert=True)
+            await event.answer("✅ Source channel removed", alert=True)
             sources = await get_channels('source')
             kb = [
                 [Button.inline(ch.get('title', 'N/A'), b"noop"),
-                 Button.inline("Remove", f"remove_source:{ch['channel_id']}".encode())]
+                 Button.inline("❌ Remove", f"remove_source:{ch['channel_id']}".encode())]
                 for ch in sources
             ]
-            kb.append([Button.inline("Back", b"admin_sources")])
+            kb.append([Button.inline("🔙 Back", b"admin_sources")])
             if not sources:
-                return await event.edit("*No more source channels.*",
-                                       buttons=[[Button.inline("Back", b"admin_sources")]], link_preview=False)
-            return await event.edit("*Select Source Channel to Remove*", buttons=kb, link_preview=False)
+                return await event.edit("🗑 *No more source channels.*",
+                                       buttons=[[Button.inline("🔙 Back", b"admin_sources")]], link_preview=False)
+            return await event.edit("🗑 *Select Source Channel to Remove*", buttons=kb, link_preview=False)
         if data == 'admin_update_gif':
             pending_input[uid] = {'action': 'confirm_update_gif'}
-            return await event.edit("*Update GIF*\n\nSend me the new GIF URL:",
-                                   buttons=[[Button.inline("Back", b"admin_home")]], link_preview=False)
-
+            return await event.edit("🎬 *Update GIF*\n\nSend me the new GIF URL:",
+                                   buttons=[[Button.inline("🔙 Back", b"admin_home")]], link_preview=False)
     except Exception as e:
         logger.error(f"Error in admin callback handler for user {uid}, data {data}: {e}")
         await event.answer("An error occurred.", alert=True)
@@ -899,7 +814,7 @@ async def admin_callback_handler(event):
         except Exception:
             pass
 
-    await event.answer("Done")
+    await event.answer("✅ Done" if not event.answered else "")
 
 @bot_client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def admin_private_handler(event):
@@ -909,22 +824,8 @@ async def admin_private_handler(event):
         logger.warning(f"Unauthorized private message from user ID: {uid}")
         return
 
-    txt = event.raw_text.strip().lower()
+    txt = event.raw_text.strip()
     logger.info(f"Admin {uid} sent private message: {txt}")
-
-    # YENİ X KONTROL KOMUTLARI
-    if txt == "x pause":
-        await set_bot_setting("x_posting_enabled", "disabled")
-        await event.reply("X paylaşımı durduruldu.")
-        return
-    elif txt == "x start":
-        await set_bot_setting("x_posting_enabled", "enabled")
-        await event.reply("X paylaşımı başlatıldı.")
-        return
-    elif txt == "x status":
-        status = await get_bot_setting("x_posting_enabled") or "enabled"
-        await event.reply(f"X paylaşımı: {status.capitalize()}")
-        return
 
     if uid in pending_input:
         act = pending_input.pop(uid)['action']
@@ -934,11 +835,11 @@ async def admin_private_handler(event):
                     m = int(txt)
                     if m <= 0: raise ValueError("Must be positive")
                 except ValueError:
-                    await event.reply("Please send a valid positive number of minutes.")
+                    await event.reply("⚠ Please send a valid positive number of minutes.")
                     pending_input[uid] = {'action': 'pause'}
                     return
                 await set_bot_setting("bot_status", "paused")
-                await event.reply(f"Paused for {m} minutes.")
+                await event.reply(f"⏸ Paused for {m} minutes.")
                 asyncio.create_task(resume_after(m, uid))
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
                                                                 buttons=await build_admin_keyboard(), link_preview=False))
@@ -948,15 +849,15 @@ async def admin_private_handler(event):
                     new_id = int(txt)
                     if new_id <= 0: raise ValueError("Must be positive")
                 except ValueError:
-                    await event.reply("Invalid user ID. Please send a positive integer ID.")
+                    await event.reply("⚠ Invalid user ID. Please send a positive integer ID.")
                     pending_input[uid] = {'action': 'confirm_add_admin'}
                     return
                 current_admins = await get_admins()
                 if new_id in current_admins:
-                    await event.reply(f"User ID {new_id} is already an admin.")
+                    await event.reply(f"ℹ User ID {new_id} is already an admin.")
                 else:
                     await add_admin(new_id, f"ID:{new_id}")
-                    await event.reply(f"Admin {new_id} added.")
+                    await event.reply(f"✅ Admin {new_id} added.")
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
                                                                 buttons=await build_admin_keyboard(), link_preview=False))
                 return
@@ -977,17 +878,17 @@ async def admin_private_handler(event):
                         me = await bot_client.get_me()
                         await bot_client(GetParticipantRequest(channel=channel_id, participant=me.id))
                     except Exception:
-                        await event.reply("Bot is not in that channel or doesn't have access. Make sure the bot is added.")
+                        await event.reply("❌ Bot is not in that channel or doesn't have access. Make sure the bot is added.")
                         pending_input[uid] = {'action': 'confirm_add_target'}
                         return
                     await add_channel(channel_id, channel_username, channel_title, "target")
-                    await event.reply(f"Target channel {channel_title} ({channel_id}) added.")
+                    await event.reply(f"✅ Target channel {channel_title} ({channel_id}) added.")
                     await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
                                                                     buttons=await build_admin_keyboard(), link_preview=False))
                     return
                 except Exception as e:
                     logger.error(f"Error adding target channel {channel_input}: {e}")
-                    await event.reply(f"Could not add target channel '{channel_input}'. Error: {e}")
+                    await event.reply(f"❌ Could not add target channel '{channel_input}'. Error: {e}")
                     pending_input[uid] = {'action': 'confirm_add_target'}
                     return
             if act == 'confirm_add_source':
@@ -998,7 +899,7 @@ async def admin_private_handler(event):
                     cid = channel_input
                 try:
                     if not await user_client.is_user_authorized():
-                        await event.reply("User client not authorized. Cannot verify source channel access.")
+                        await event.reply("❌ User client not authorized. Cannot verify source channel access.")
                         pending_input[uid] = {'action': 'confirm_add_source'}
                         return
                     entity = await user_client.get_entity(cid)
@@ -1011,23 +912,23 @@ async def admin_private_handler(event):
                         me_user = await user_client.get_me()
                         await user_client(GetParticipantRequest(channel=channel_id, participant=me_user.id))
                     except Exception:
-                        await event.reply("Your user account is not in that source channel or it's not accessible.")
+                        await event.reply("❌ Your user account is not in that source channel or it's not accessible.")
                         pending_input[uid] = {'action': 'confirm_add_source'}
                         return
                     await add_channel(channel_id, channel_username, channel_title, "source")
-                    await event.reply(f"Source channel {channel_title} ({channel_id}) added.")
+                    await event.reply(f"✅ Source channel {channel_title} ({channel_id}) added.")
                     await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
                                                                     buttons=await build_admin_keyboard(), link_preview=False))
                     return
                 except Exception as e:
                     logger.error(f"Error adding source channel {channel_input}: {e}")
-                    await event.reply(f"Could not add source channel '{channel_input}'. Error: {e}")
+                    await event.reply(f"❌ Could not add source channel '{channel_input}'. Error: {e}")
                     pending_input[uid] = {'action': 'confirm_add_source'}
                     return
             if act == 'confirm_update_gif':
                 link = txt.strip()
                 if not link.startswith(('http://', 'https://')):
-                    await event.reply("Invalid URL format. Please send a valid HTTP or HTTPS URL.")
+                    await event.reply("⚠ Invalid URL format. Please send a valid HTTP or HTTPS URL.")
                     pending_input[uid] = {'action': 'confirm_update_gif'}
                     return
                 if "dropboxusercontent.com" in link:
@@ -1039,16 +940,16 @@ async def admin_private_handler(event):
                 elif "?dl=1" not in link and "?" in link:
                     link = link.replace("?", "?dl=1&")
                 await set_bot_setting("custom_gif", link)
-                await event.reply("GIF URL updated.")
+                await event.reply("✅ GIF URL updated.")
                 await retry_telethon_call(bot_client.send_message(uid, await get_admin_dashboard(),
                                                                 buttons=await build_admin_keyboard(), link_preview=False))
                 return
         except Exception as e:
             logger.error(f"Error handling admin input for user {uid}, action {act}: {e}")
-            await event.reply("An unexpected error occurred while processing your input.")
+            await event.reply("⚠ An unexpected error occurred while processing your input.")
             pending_input.pop(uid, None)
             try:
-                await retry_telethon_call(bot_client.send_message(uid, "An error occurred. Returning to dashboard.",
+                await retry_telethon_call(bot_client.send_message(uid, "⚠ An error occurred. Returning to dashboard.",
                                                                 buttons=await build_admin_keyboard(), link_preview=False))
             except Exception:
                 pass
@@ -1072,7 +973,7 @@ async def channel_handler(event):
         return
     txt = event.raw_text.strip()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    logger.info(f"Processing message {message_id} at {now} from chat {chat_id}: {txt[:100]}...")
+    logger.info(f"📥 Processing message {message_id} at {now} from chat {chat_id}: {txt[:100]}...")
     update_pattern_check = re.compile(r"MC:\s*\$?[\d\.,KkMmBb]+\s*(?:->|[-–>→])\s*\$?([\d\.,KkMmBb]+)", re.IGNORECASE)
     if update_pattern_check.search(txt):
         logger.info(f"Update pattern matched for message {message_id}.")
@@ -1135,12 +1036,12 @@ async def channel_handler(event):
         return
     logger.info(f"Processing as new call for contract: {contract} from message {message_id}.")
     await record_processed_contract(contract)
-    logger.info(f"Sending contract {contract} to @ttfbotbot at {now} for message {message_id}.")
+    logger.info(f"➡ Sending contract {contract} to @ttfbotbot at {now} for message {message_id}.")
     ttf_response = None
     try:
         if not await user_client.is_user_authorized():
-            logger.warning(f"User client not authorized for TTF interaction. Skipping for message {message_id}.")
-            await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"User client not authorized for contract: `{contract}` (from message {message_id} in {chat_id}). Please visit /login."))
+            logger.warning(f"⚠ User client not authorized for TTF interaction. Skipping for message {message_id}.")
+            await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ User client not authorized for contract: `{contract}` (from message {message_id} in {chat_id}). Please visit /login."))
             return
         if not user_client.is_connected():
             await user_client.connect()
@@ -1149,78 +1050,62 @@ async def channel_handler(event):
             await retry_telethon_call(conv.send_message(contract))
             logger.info(f"Sent '{contract}' to @ttfbotbot.")
             ttf_response = await retry_telethon_call(conv.get_response())
-            logger.info(f"Received response from @ttfbotbot (Msg ID: {ttf_response.id}) for message {message_id}.")
+            logger.info(f"⬅ Received response from @ttfbotbot (Msg ID: {ttf_response.id}) for message {message_id}.")
     except asyncio.TimeoutError:
-        logger.warning(f"TTF bot conversation timed out for contract {contract} from message {message_id}.")
-        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot timed out for contract: `{contract}` (from message {message_id} in {chat_id})."))
+        logger.warning(f"⚠ TTF bot conversation timed out for contract {contract} from message {message_id}.")
+        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ TTF bot timed out for contract: `{contract}` (from message {message_id} in {chat_id})."))
         return
     except Exception as e:
-        logger.error(f"TTF bot error for contract {contract} (from message {message_id}): {e}")
-        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
+        logger.error(f"⚠ TTF bot error for contract {contract} (from message {message_id}): {e}")
+        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"❌ TTF bot error for contract `{contract}` (from message {message_id} in {chat_id}): {e}"))
         return
-        if ttf_response and ttf_response.raw_text:
-        # GÖRSEL AL
-            source_media = event.message.media
-        if source_media:
-            logger.info(f"Kaynak görsel bulundu → {source_media.__class__.__name__}")
-        else:
-            logger.info("Kaynak mesajda görsel YOK → Sabit GIF kullanılır.")
-
+    if ttf_response and ttf_response.raw_text:
+        logger.info(f"Parsing TFF bot output for contract {contract}: {ttf_response.raw_text[:100]}...")
         data = parse_tff_output(ttf_response.raw_text)
         token_name = extract_token_name_from_source(txt)
         if token_name == "unknown":
+            logger.warning(f"Could not extract token name from source message {message_id} for contract {contract}. Using 'UNKNOWN'.")
             token_name = "UNKNOWN"
-
-        new_text = build_new_template_with_emoji(token_name, contract, data.get('market_cap', 'N/A'),
+        new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
-
+        # X için buton URL'lerini ekle
+        new_text_for_x = new_text + f"\n\n📈 Chart: https://dexscreener.com/solana/{contract}\n🛡 Trojan: https://t.me/solana_trojanbot?start=r-gemwagmi0001"
         target_channels = await get_channels('target')
         if not target_channels:
             logger.warning("No target channels configured to send new call announcement.")
             return
-
         announcement_id = None
         for target_channel_info in target_channels:
             target_channel_id = target_channel_info["channel_id"]
             try:
                 logger.info(f"Sending new call announcement for '{token_name}' ({contract}) to target channel ID: {target_channel_id}.")
-
-                # TELEGRAM'A GÖRSELLİ GÖNDER
                 msg = await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=new_text,
-                    file=source_media or 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdVZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
+                    file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
                     buttons=buttons
                 ))
-
-                # X'E GÖRSELLİ TWEET AT (SADECE 1 KEZ!)
-                x_text = build_x_text(token_name, contract, data.get('market_cap', 'N/A'))
-                post_to_x(x_text, media=source_media)
-
-                # CA'YI AYRI MESAJ OLARAK GÖNDER
+                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
+                await post_to_x(new_text_for_x, media_url='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif')  # X'e gönder
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
                 ))
-
+                logger.info(f"Contract address '{contract}' sent as separate message to {target_channel_id}.")
                 if announcement_id is None:
                     announcement_id = msg.id
-
-                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-
             except Exception as e:
-                logger.error(f"Gönderim hatası (target: {target_channel_id}): {e}")
-
+                logger.error(f"Error sending new call announcement or contract to target {target_channel_id} for contract {contract}: {e}")
         if announcement_id is not None:
             await add_token_mapping(token_name.lower(), contract, announcement_id)
             logger.info(f"Recorded mapping for '{token_name}' -> {contract} with announcement ID {announcement_id}.")
         else:
             await add_token_mapping(token_name.lower(), contract, None)
-            logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}).")
+            logger.warning(f"Failed to send announcement to any target channels for '{token_name}' ({contract}). Mapping stored without announcement ID.")
     else:
         logger.warning(f"TTF bot did not return a message or message was empty for contract {contract} from message {message_id}. Cannot announce.")
-        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"TTF bot returned empty message for contract: `{contract}` (from message {message_id} in {chat_id}). Cannot announce."))
+        await retry_telethon_call(bot_client.send_message(DEFAULT_ADMIN_ID, f"⚠ TTF bot returned empty message for contract: `{contract}` (from message {message_id} in {chat_id}). Cannot announce."))
 
 async def resume_after(minutes: int, admin_id: int):
     if minutes <= 0:
@@ -1232,7 +1117,7 @@ async def resume_after(minutes: int, admin_id: int):
         await set_bot_setting('bot_status', 'running')
         logger.info("Bot resuming after pause.")
         try:
-            await retry_telethon_call(bot_client.send_message(admin_id, "Resumed after pause."))
+            await retry_telethon_call(bot_client.send_message(admin_id, "▶ Resumed after pause."))
         except Exception as e:
             logger.error(f"Failed to send resume message to admin {admin_id}: {e}")
     else:
@@ -1244,7 +1129,7 @@ async def correct_last_announcement():
         logger.info("No target channels configured. Skipping last announcement correction.")
         return
     if not await user_client.is_user_authorized():
-        logger.warning("User client not authorized. Cannot correct last announcement.")
+        logger.warning("⚠ User client not authorized. Cannot correct last announcement.")
         return
     logger.info("Starting last announcement correction task...")
     for ch in targets:
@@ -1277,7 +1162,7 @@ async def correct_last_announcement():
                 else:
                     logger.warning(f"Mapping found by ID {last_msg.id} but missing token_name or contract_address in DB for channel {ch['channel_id']}.")
             else:
-                if "New GEM Landed!" in text and extract_contract(text):
+                if "New 💎 GEM Landed!" in text and extract_contract(text):
                     existing_mapping_by_token = await get_token_mapping(extracted_token.lower())
                     if existing_mapping_by_token and existing_mapping_by_token.get("announcement_message_id") is None:
                         await update_token_announcement(extracted_token.lower(), last_msg.id)
@@ -1286,7 +1171,7 @@ async def correct_last_announcement():
                 else:
                     logger.debug(f"No existing mapping found by announcement ID {last_msg.id} and message doesn't look like a new announcement in channel {ch['channel_id']}.")
         except Exception as e:
-            logger.error(f"Error correcting  last announcement in channel {ch['channel_id']}: {e}")
+            logger.error(f"Error correcting last announcement in channel {ch['channel_id']}: {e}")
     logger.info("Last announcement correction task finished.")
 
 async def check_bot_admin() -> bool:
@@ -1304,10 +1189,10 @@ async def check_bot_admin() -> bool:
                 participant=me.id
             ))
             if not isinstance(participant.participant, (ChannelParticipantAdmin, ChannelParticipantCreator)):
-                logger.error(f"Bot lacks admin rights in target channel: {target_channel_id} ({ch.get('title', 'N/A')}). Required for posting.")
+                logger.error(f"❌ Bot lacks admin rights in target channel: {target_channel_id} ({ch.get('title', 'N/A')}). Required for posting.")
                 is_admin_in_all_targets = False
             else:
-                logger.info(f"Bot has admin rights in target channel: {target_channel_id} ({ch.get('title', 'N/A')}).")
+                logger.info(f"✅ Bot has admin rights in target channel: {target_channel_id} ({ch.get('title', 'N/A')}).")
         except Exception as e:
             logger.error(f"Error checking bot admin status in channel {target_channel_id} ({ch.get('title', 'N/A')}): {e}")
             is_admin_in_all_targets = False
@@ -1333,42 +1218,36 @@ async def get_admin_dashboard():
     bot_status = (await get_bot_setting("bot_status")) or "running"
     x_posting_status = (await get_bot_setting("x_posting_enabled")) or "enabled"
     return (
-        "*Hey Boss!*\n\n"
-        f"*Bot Status:* `{bot_status.capitalize()}`\n"
-        f"*X Posting:* `{x_posting_status.capitalize()}`\n\n"
-        f"*Affirmation:* {aff}\n"
-        f"*Motivation:* {mot}\n\n"
+        "👋 *Hey Boss!* 💎\n\n"
+        f"🤖 *Bot Status:* `{bot_status.capitalize()}`\n"
+        f"📱 *X Posting:* `{x_posting_status.capitalize()}`\n\n"  # X durumu eklendi
+        f"💖 *Affirmation:* {aff}\n"
+        f"🚀 *Motivation:* {mot}\n\n"
         "What would you like to do?"
     )
 
 async def build_admin_keyboard():
     x_posting_status = await get_bot_setting("x_posting_enabled") or "enabled"
     x_posting_button = (
-        Button.inline("Pause X Posting", b"admin_pause_x_posting")
+        Button.inline("⏸ Pause X Posting", b"admin_pause_x_posting")
         if x_posting_status == "enabled"
-        else Button.inline("Start X Posting", b"admin_start_x_posting")
+        else Button.inline("▶ Start X Posting", b"admin_start_x_posting")
     )
     return [
-        [Button.inline("Start Bot", b"admin_start"),
-         Button.inline("Pause Bot", b"admin_pause"),
-         Button.inline("Stop Bot", b"admin_stop")],
-        [Button.inline("Admins", b"admin_admins"),
-         Button.inline("Targets", b"admin_targets"),
-         Button.inline("Sources", b"admin_sources")],
-        [Button.inline("Update GIF", b"admin_update_gif"),
-         x_posting_button]
+        [Button.inline("▶ Start Bot", b"admin_start"),
+         Button.inline("⏸ Pause Bot", b"admin_pause"),
+         Button.inline("🛑 Stop Bot", b"admin_stop")],
+        [Button.inline("👤 Admins", b"admin_admins"),
+         Button.inline("📅 Targets", b"admin_targets"),
+         Button.inline("📡 Sources", b"admin_sources")],
+        [Button.inline("🎬 Update GIF", b"admin_update_gif"),
+         x_posting_button]  # X butonu eklendi
     ]
 
 async def main():
     logger.info("Starting main bot asynchronous tasks...")
     await init_db()
     logger.info("Database initialization complete.")
-
-    # <--- SAYAÇ OKU (yeniden başlatmada kaybolmasın)
-    counter = await get_bot_setting("x_post_counter")
-    global x_post_counter
-    x_post_counter = int(counter) if counter and counter.isdigit() else 0
-
     admins = await get_admins()
     if DEFAULT_ADMIN_ID not in admins:
         await add_admin(DEFAULT_ADMIN_ID, 'Default', is_default=True)
@@ -1396,21 +1275,21 @@ async def main():
             logger.debug(f"Setting '{k}' already exists in DB.")
     try:
         await bot_client.start(bot_token=BOT_TOKEN)
-        logger.info("Bot client started and connected.")
+        logger.info("🤖 Bot client started and connected.")
     except Exception as e:
-        logger.critical(f"Failed to start bot client: {e}. Please check BOT_TOKEN environment variable.")
+        logger.critical(f"❌ Failed to start bot client: {e}. Please check BOT_TOKEN environment variable.")
         raise
     await user_client.connect()
     if not await user_client.is_user_authorized():
-        logger.warning("User client not authorized. Please visit /login to authorize.")
+        logger.warning("⚠ User client not authorized. Please visit /login to authorize.")
     else:
-        logger.info("User client authorized.")
+        logger.info("👤 User client authorized.")
         asyncio.create_task(correct_last_announcement())
         logger.info("Started background task: correct_last_announcement.")
     if not await check_bot_admin():
-        logger.error("Bot lacks admin rights in one or more target channels. Posting might fail.")
+        logger.error("❌ Bot lacks admin rights in one or more target channels. Posting might fail.")
     else:
-        logger.info("Bot has admin rights in all configured target channels.")
+        logger.info("✅ Bot has admin rights in all configured target channels.")
     logger.info("Bot is now running in the asyncio event loop.")
     await asyncio.Event().wait()
 
@@ -1429,13 +1308,13 @@ if __name__ == '__main__':
                 port = int(os.environ.get('PORT', '5000'))
                 response = requests.get(f"http://localhost:{port}/health")
                 if response.status_code == 200:
-                    logger.info("Self-ping OK")
+                    logger.info("✅ Self-ping OK")
                 else:
-                    logger.warning(f"Self-ping returned status code {response.status_code}")
+                    logger.warning(f"⚠ Self-ping returned status code {response.status_code}")
             except requests.exceptions.ConnectionError as e:
-                logger.error(f"Self-ping failed: ConnectionError - {e}")
+                logger.error(f"❌ Self-ping failed: ConnectionError - {e}")
             except Exception as e:
-                logger.error(f"Self-ping failed: {e}")
+                logger.error(f"❌ Self-ping failed: {e}")
             threading.Timer(4*60, ping).start()
         time.sleep(5)
         ping()
