@@ -15,7 +15,13 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
-import tweepy  # X API için eklendi
+import os           # <-- EKLENMESİ GEREK
+import time         # <-- EKLENMESİ GEREK
+import requests     # <-- Tweet göndermek için gerekli
+import base64
+import urllib.parse
+import hmac
+import hashlib
 
 # Ortam değişkenleri (sabit değerler kaldırıldı)
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
@@ -32,62 +38,76 @@ X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
 
-# X API bağlantısı
-auth = tweepy.OAuthHandler(X_CONSUMER_KEY, X_CONSUMER_SECRET)
-auth.set_access_token(X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
-x_api = tweepy.API(auth)
-
-app = Flask(__name__)
-app.secret_key = SECRET_KEY
-
-bot_client = TelegramClient('lion', API_ID, API_HASH)
-user_client = TelegramClient('monkey', API_ID, API_HASH)
-
-async def post_to_x(message: str, media_url: str = None):
-    x_posting_enabled = await get_bot_setting("x_posting_enabled") or "enabled"
+def post_to_x(message):
+    x_posting_enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
     if x_posting_enabled != "enabled":
-        logger.info("X paylaşımı devre dışı, atlandı.")
+        logger.info("X paylaşımı devre dışı.")
         return
 
+    text = (message or "").strip()
+    if not text:
+        logger.warning("X'e gönderilecek mesaj boş.")
+        return
+
+    if len(text) > 280:
+        text = text[:277] + "..."
+
+    url = "https://api.twitter.com/2/tweets"
+    method = "POST"
+
+    oauth_params = {
+        "oauth_consumer_key": X_CONSUMER_KEY,
+        "oauth_token": X_ACCESS_TOKEN,
+        "oauth_nonce": base64.b64encode(os.urandom(16)).decode('utf-8'),
+        "oauth_timestamp": str(int(time.time())),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_version": "1.0"
+    }
+
+    param_string = "&".join([
+        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
+        for k, v in sorted(oauth_params.items())
+    ])
+
+    base_string = (
+        f"{method}&{urllib.parse.quote(url, safe='')}&"
+        f"{urllib.parse.quote(param_string, safe='')}"
+    )
+
+    signing_key = (
+        f"{urllib.parse.quote(X_CONSUMER_SECRET, safe='')}&"
+        f"{urllib.parse.quote(X_ACCESS_TOKEN_SECRET or '', safe='')}"
+    )
+
+    hashed = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1)
+    signature = base64.b64encode(hashed.digest()).decode()
+
+    oauth_params["oauth_signature"] = signature
+
+    auth_header = "OAuth " + ", ".join([
+        f'{k}="{urllib.parse.quote(v, safe="")}"'
+        for k, v in sorted(oauth_params.items())
+    ])
+
     try:
-        # Karakter sınırı
-        if len(message) > 280:
-            message = message[:277] + "..."
+        response = requests.post(
+            url=url,
+            headers={
+                "Authorization": auth_header,
+                "Content-Type": "application/json",
+                "User-Agent": "GemWagmiBot/1.0"
+            },
+            json={"text": text}
+        )
 
-        if media_url:
-            # Medyayı indir
-            resp = requests.get(media_url, timeout=20)
-            resp.raise_for_status()
-            
-            # Geçici dosya (Render, Railway, VPS vs. hepsinde /tmp yazılabilir)
-            tmp_path = "/tmp/x_media_temp.gif"
-            with open(tmp_path, "wb") as f:
-                f.write(resp.content)
-
-            # Tweepy v1.1 API ile media upload + tweet
-            media = x_api.media_upload(filename=tmp_path)
-            x_api.update_status(status=message, media_ids=[media.media_id])
-            
-            # Temizlik
-            try:
-                os.remove(tmp_path)
-            except:
-                pass
+        if response.status_code == 201:
+            logger.info(f"Tweet atıldı: {text[:60]}...")
         else:
-            x_api.update_status(status=message)
+            logger.error(f"X API Hatası: {response.status_code} {response.text}")
 
-        logger.info(f"X'e başarıyla paylaşıldı: {message[:80]}")
-        
-    except tweepy.Forbidden as e:
-        logger.error(f"X API 403 Forbidden – Muhtemelen app izinleri eksik veya token revoke: {e}")
-    except tweepy.Unauthorized as e:
-        logger.error(f"X API 401 Unauthorized – Token yanlış/iptal: {e}")
-    except tweepy.TooManyRequests as e:
-        logger.warning(f"X rate limit aşıldı: {e}")
-    except tweepy.TweepyException as e:
-        logger.error(f"Tweepy hatası: {e}")
     except Exception as e:
-        logger.error(f"X paylaşım genel hata: {e}")
+        logger.error(f"Tweet gönderim hatası: {e}")
+
 
 def get_connection():
     try:
@@ -1111,7 +1131,7 @@ async def channel_handler(event):
                     buttons=buttons
                 ))
                 logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-                await post_to_x(new_text_for_x, media_url='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif')  # X'e gönder
+                post_to_x(new_text_for_x)  # X'e gönder
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
