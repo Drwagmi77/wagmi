@@ -43,27 +43,51 @@ app.secret_key = SECRET_KEY
 bot_client = TelegramClient('lion', API_ID, API_HASH)
 user_client = TelegramClient('monkey', API_ID, API_HASH)
 
-# X paylaşım fonksiyonu
-async def post_to_x(message, media_url=None):
+async def post_to_x(message: str, media_url: str = None):
     x_posting_enabled = await get_bot_setting("x_posting_enabled") or "enabled"
     if x_posting_enabled != "enabled":
-        logger.info(f"X paylaşımı devre dışı, mesaj paylaşılmadı: {message[:100]}...")
+        logger.info("X paylaşımı devre dışı, atlandı.")
         return
+
     try:
-        if len(message) > 280:  # X karakter sınırı
+        # Karakter sınırı
+        if len(message) > 280:
             message = message[:277] + "..."
+
         if media_url:
-            response = requests.get(media_url)
-            response.raise_for_status()
-            media = response.content
-            x_api.update_status_with_media(status=message, filename="media.gif", file=media)
+            # Medyayı indir
+            resp = requests.get(media_url, timeout=20)
+            resp.raise_for_status()
+            
+            # Geçici dosya (Render, Railway, VPS vs. hepsinde /tmp yazılabilir)
+            tmp_path = "/tmp/x_media_temp.gif"
+            with open(tmp_path, "wb") as f:
+                f.write(resp.content)
+
+            # Tweepy v1.1 API ile media upload + tweet
+            media = x_api.media_upload(filename=tmp_path)
+            x_api.update_status(status=message, media_ids=[media.media_id])
+            
+            # Temizlik
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
         else:
             x_api.update_status(status=message)
-        logger.info(f"X'te paylaşıldı: {message[:100]}...")
-    except tweepy.errors.TweepyException as e:
-        logger.error(f"X paylaşım hatası: {e}")
+
+        logger.info(f"X'e başarıyla paylaşıldı: {message[:80]}")
+        
+    except tweepy.Forbidden as e:
+        logger.error(f"X API 403 Forbidden – Muhtemelen app izinleri eksik veya token revoke: {e}")
+    except tweepy.Unauthorized as e:
+        logger.error(f"X API 401 Unauthorized – Token yanlış/iptal: {e}")
+    except tweepy.TooManyRequests as e:
+        logger.warning(f"X rate limit aşıldı: {e}")
+    except tweepy.TweepyException as e:
+        logger.error(f"Tweepy hatası: {e}")
     except Exception as e:
-        logger.error(f"Medya indirme veya X paylaşım hatası: {e}")
+        logger.error(f"X paylaşım genel hata: {e}")
 
 def get_connection():
     try:
