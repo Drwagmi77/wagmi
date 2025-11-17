@@ -644,7 +644,7 @@ CODE_FORM = """<!doctype html>
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
     if request.method == 'POST':
-        phone = request.form.get('phone', '').strip()
+        phone = (await request.form)['phone'].strip()
         if not phone:
             return "<p>Phone number is required.</p>", 400
         session['phone'] = phone
