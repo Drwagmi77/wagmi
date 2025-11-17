@@ -38,76 +38,37 @@ X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
 
+# pip install tweepy
+import tweepy
+
+auth = tweepy.OAuth1UserHandler(
+    X_CONSUMER_KEY, X_CONSUMER_SECRET,
+    X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
+)
+api = tweepy.API(auth)
+
 def post_to_x(message):
-    x_posting_enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
-    if x_posting_enabled != "enabled":
+    enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
+    if enabled != "enabled":
         logger.info("X paylaşımı devre dışı.")
+        return
+
+    if not all([X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]):
+        logger.warning("X API anahtarları eksik. Tweet atılamıyor.")
         return
 
     text = (message or "").strip()
     if not text:
-        logger.warning("X'e gönderilecek mesaj boş.")
         return
 
     if len(text) > 280:
         text = text[:277] + "..."
 
-    url = "https://api.twitter.com/2/tweets"
-    method = "POST"
-
-    oauth_params = {
-        "oauth_consumer_key": X_CONSUMER_KEY,
-        "oauth_token": X_ACCESS_TOKEN,
-        "oauth_nonce": base64.b64encode(os.urandom(16)).decode('utf-8'),
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_version": "1.0"
-    }
-
-    param_string = "&".join([
-        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
-        for k, v in sorted(oauth_params.items())
-    ])
-
-    base_string = (
-        f"{method}&{urllib.parse.quote(url, safe='')}&"
-        f"{urllib.parse.quote(param_string, safe='')}"
-    )
-
-    signing_key = (
-        f"{urllib.parse.quote(X_CONSUMER_SECRET, safe='')}&"
-        f"{urllib.parse.quote(X_ACCESS_TOKEN_SECRET or '', safe='')}"
-    )
-
-    hashed = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1)
-    signature = base64.b64encode(hashed.digest()).decode()
-
-    oauth_params["oauth_signature"] = signature
-
-    auth_header = "OAuth " + ", ".join([
-        f'{k}="{urllib.parse.quote(v, safe="")}"'
-        for k, v in sorted(oauth_params.items())
-    ])
-
     try:
-        response = requests.post(
-            url=url,
-            headers={
-                "Authorization": auth_header,
-                "Content-Type": "application/json",
-                "User-Agent": "GemWagmiBot/1.0"
-            },
-            json={"text": text}
-        )
-
-        if response.status_code == 201:
-            logger.info(f"Tweet atıldı: {text[:60]}...")
-        else:
-            logger.error(f"X API Hatası: {response.status_code} {response.text}")
-
+        api.update_status(text)
+        logger.info(f"Tweet atıldı: {text[:50]}...")
     except Exception as e:
-        logger.error(f"Tweet gönderim hatası: {e}")
-
+        logger.error(f"Tweet hatası: {e}")
 
 def get_connection():
     try:
