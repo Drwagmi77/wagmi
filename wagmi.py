@@ -24,7 +24,6 @@ import hmac
 import hashlib
 # Flask app tanımı (EKSİK OLAN BU!)
 app = Flask(__name__)
-app.secret_key = SECRET_KEY  # session için gerekli
 
 # Ortam değişkenleri (sabit değerler kaldırıldı)
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
