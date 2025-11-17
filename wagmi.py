@@ -581,10 +581,21 @@ def extract_token_name_from_source(text: str) -> str:
     return "unknown"
 
 def parse_tff_output(text: str) -> dict:
-        data = {}
-    data["mint_status"] = (re.search(r"Mint\s*:\s*([^\n,}]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
-    data["liquidity_status"] = (re.search(r"Liq(?:uidity)?\s*:\s*\$?([\d\.,KkMmBb]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
-    data["market_cap"] = (re.search(r"(?:MC|Market\s+Cap)\s*:\s*\$?([\d\.,KkMmBb]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
+    data = {}
+    
+    # MINT — hem eski (🌿 Mint: Enabled) hem yeni (Mint: Renounced / Enabled (locked) / Disabled)
+    mint_match = re.search(r"(?:🌿\s*)?Mint\s*:\s*([^\n\r,}]+)", text, re.IGNORECASE)
+    data["mint_status"] = mint_match.group(1).strip() if mint_match else "N/A"
+    
+    # LIQUIDITY — hem "Liq:" hem "Liquidity:" hem de boşluksuz/virgüllü
+    liq_match = re.search(r"Liq(?:uidity)?\s*[:：]?\s*\$?([\d\.,]+[KkMmBb]?)", text, re.IGNORECASE)
+    data["liquidity_status"] = liq_match.group(1).strip() if liq_match else "N/A"
+    
+    # MARKET CAP — hem "MC:" hem "Market Cap:" hem de boşluksuz
+    mc_match = re.search(r"(?:MC|Market\s+Cap)\s*[:：]?\s*\$?([\d\.,]+[KkMmBb]?)", text, re.IGNORECASE)
+    data["market_cap"] = mc_match.group(1).strip() if mc_match else "N/A"
+    
+    logger.debug(f"Parsed TFF output → MC: {data['market_cap']} | Liq: {data['liquidity_status']} | Mint: {data['mint_status']}")
     return data
 
 def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_status, mint_status):
