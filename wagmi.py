@@ -1183,7 +1183,8 @@ async def channel_handler(event):
             token_name = "UNKNOWN"
         new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
-        buttons = build_announcement_buttons(contract)
+               buttons = build_announcement_buttons(contract)
+        
         # ✅ YENİ X TWEET KODU
         random_bot = random.choice(BOT_LINKS).format(contract=contract)
         chart_info = f"📈 Chart: https://dexscreener.com/solana/{contract}\n{random_bot}"
@@ -1195,6 +1196,23 @@ async def channel_handler(event):
             logger.info(f"✓ Enhanced X post sent for {token_name}")
         else:
             logger.warning(f"✗ Failed to send X post for {token_name}")
+        
+        target_channels = await get_channels('target')
+        if not target_channels:
+            logger.warning("No target channels configured to send new call announcement.")
+            return
+        announcement_id = None
+        for target_channel_info in target_channels:
+            target_channel_id = target_channel_info["channel_id"]
+            try:
+                logger.info(f"Sending new call announcement for '{token_name}' ({contract}) to target channel ID: {target_channel_id}.")
+                msg = await retry_telethon_call(bot_client.send_message(
+                    target_channel_id,
+                    message=new_text,
+                    file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
+                    buttons=buttons
+                ))
+                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
                 
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
