@@ -618,19 +618,21 @@ CODE_FORM = """<!doctype html>
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
     if request.method == 'POST':
-        phone = (await request.form)['phone'].strip()
+        form = await request.form
+        phone = form.get('phone', '').strip()   # BU SATIRI BÖYLE YAP
         if not phone:
             return "<p>Phone number is required.</p>", 400
         session['phone'] = phone
         try:
             await user_client.connect()
             await user_client.send_code_request(phone)
-            logger.info(f"➡ Sent login code request to {phone}")
+            logger.info(f"Sent login code request to {phone}")
             return redirect('/submit-code')
         except Exception as e:
-            logger.error(f"❌ Error sending login code to {phone}: {e}")
+            logger.error(f"Error sending login code to {phone}: {e}")
             return f"<p>Error sending code: {e}</p>", 500
     return render_template_string(LOGIN_FORM)
+
 
 @app.route('/submit-code', methods=['GET', 'POST'])
 async def submit_code():
@@ -640,16 +642,17 @@ async def submit_code():
     phone = session['phone']
 
     if request.method == 'POST':
-        code = request.form.get('code', '').strip()
+        form = await request.form
+        code = form.get('code', '').strip()   # BURAYI DA BÖYLE YAP
         if not code:
             return "<p>Code is required.</p>", 400
         try:
             await user_client.sign_in(phone, code)
-            logger.info(f"✅ Logged in user-client for {phone}")
+            logger.info(f"Logged in user-client for {phone}")
             session.pop('phone', None)
             return "<p>Login successful! You can close this tab.</p>"
         except Exception as e:
-            logger.error(f"❌ Login failed for {phone}: {e}")
+            logger.error(f"Login failed for {phone}: {e}")
             return f"<p>Login failed: {e}</p>", 400
 
     return render_template_string(CODE_FORM)
