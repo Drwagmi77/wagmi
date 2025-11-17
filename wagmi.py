@@ -44,37 +44,46 @@ bot_client = TelegramClient('bot', API_ID, API_HASH)
 user_client = TelegramClient('user', API_ID, API_HASH)
 
 # pip install tweepy
+# X (Twitter) için ÇALIŞAN YÖNTEM — tweepy v2 Client
 import tweepy
 
-auth = tweepy.OAuth1UserHandler(
-    X_CONSUMER_KEY, X_CONSUMER_SECRET,
-    X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
+# YENİ VE TEK ÇALIŞAN YOL
+client = tweepy.Client(
+    consumer_key=X_CONSUMER_KEY,
+    consumer_secret=X_CONSUMER_SECRET,
+    access_token=X_ACCESS_TOKEN,
+    access_token_secret=X_ACCESS_TOKEN_SECRET
 )
-api = tweepy.API(auth)
 
 def post_to_x(message):
     enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
     if enabled != "enabled":
         logger.info("X paylaşımı devre dışı.")
-        return
+        return False
 
     if not all([X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]):
-        logger.warning("X API anahtarları eksik. Tweet atılamıyor.")
-        return
+        logger.warning("X anahtarları eksik! Tweet atılamıyor.")
+        return False
 
     text = (message or "").strip()
     if not text:
-        return
-
+        return False
     if len(text) > 280:
         text = text[:277] + "..."
 
     try:
-        api.update_status(text)
-        logger.info(f"Tweet atıldı: {text[:50]}...")
+        response = client.create_tweet(text=text)
+        tweet_id = response.data["id"]
+        logger.info(f"✓ TWEET BAŞARIYLA ATILDI → https://x.com/gemsnper/status/{tweet_id}")
+        return True
+    except tweepy.Unauthorized:
+        logger.error("X API: Anahtarların Read+Write izni yok! Developer Portal'dan kontrol et.")
+    except tweepy.Forbidden:
+        logger.error("X API: Elevated erişim eksik! App izinlerini yükselt.")
     except Exception as e:
-        logger.error(f"Tweet hatası: {e}")
-
+        logger.error(f"Tweet atılamadı: {e}")
+    return False
+    
 def get_connection():
     try:
         return psycopg2.connect(
