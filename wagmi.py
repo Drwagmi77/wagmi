@@ -6,7 +6,6 @@ import threading
 import time
 import json
 from datetime import datetime
-import sqlite3
 import random
 import requests
 import psycopg2
@@ -15,45 +14,45 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from flask import Flask, jsonify, request, redirect, session, render_template_string
-import os           # <-- EKLENMESİ GEREK
-import time         # <-- EKLENMESİ GEREK
-import requests     # <-- Tweet göndermek için gerekli
+import tweepy
 import base64
 import urllib.parse
 import hmac
 import hashlib
-# Flask app tanımı (EKSİK OLAN BU!)
-app = Flask(__name__)
 
-# Ortam değişkenleri (sabit değerler kaldırıldı)
+# ====================== BURADAN İTİBAREN SIRAYI BOZMA! ======================
+# 1. Önce API_ID, API_HASH, BOT_TOKEN tanımla
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+# 2. Şimdi Telegram client'ları tanımla (API_ID artık var)
+bot_client = TelegramClient('bot', API_ID, API_HASH)
+user_client = TelegramClient('user', API_ID, API_HASH)
+
+# 3. Flask app
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24).hex()
+
+# 4. Diğer ortam değişkenleri
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
 DB_PASS = os.environ.get("DB_PASS")
 DB_HOST = os.environ.get("DB_HOST")
 DB_PORT = os.environ.get("DB_PORT")
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 X_CONSUMER_KEY = os.environ.get("X_CONSUMER_KEY")
 X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
-# Telegram client'ları tanımla (BU EKSİK OLDUĞU İÇİN HATA ALIYORSUN)
-bot_client = TelegramClient('bot', API_ID, API_HASH)
-user_client = TelegramClient('user', API_ID, API_HASH)
 
-# pip install tweepy
-# X (Twitter) için ÇALIŞAN YÖNTEM — tweepy v2 Client
-import tweepy
-
-# YENİ VE TEK ÇALIŞAN YOL
+# 5. X için tweepy v2 client (KESİNLİKLE ÇALIŞIR)
 client = tweepy.Client(
     consumer_key=X_CONSUMER_KEY,
     consumer_secret=X_CONSUMER_SECRET,
     access_token=X_ACCESS_TOKEN,
     access_token_secret=X_ACCESS_TOKEN_SECRET
 )
+# =========================================================================
 
 def post_to_x(message):
     enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
