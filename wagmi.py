@@ -581,10 +581,10 @@ def extract_token_name_from_source(text: str) -> str:
     return "unknown"
 
 def parse_tff_output(text: str) -> dict:
-    data = {}
-    data["mint_status"] = (re.search(r"Mint:\s*(\w+)", text) or [None, "N/A"])[1]
-    data["liquidity_status"] = (re.search(r"Liq:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
-    data["market_cap"] = (re.search(r"MC:\s*\$?([\d\.,KkMmBb]+)", text) or [None, "N/A"])[1]
+        data = {}
+    data["mint_status"] = (re.search(r"Mint\s*:\s*([^\n,}]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
+    data["liquidity_status"] = (re.search(r"Liq(?:uidity)?\s*:\s*\$?([\d\.,KkMmBb]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
+    data["market_cap"] = (re.search(r"(?:MC|Market\s+Cap)\s*:\s*\$?([\d\.,KkMmBb]+)", text, re.IGNORECASE) or [None, "N/A"])[1]
     return data
 
 def build_new_template_with_emoji(token_name, contract, market_cap, liquidity_status, mint_status):
