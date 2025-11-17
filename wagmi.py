@@ -20,21 +20,109 @@ import urllib.parse
 import hmac
 import hashlib
 
+# ====================== X TWEET AYARLARI ======================
+TWEET_TITLES = [
+    "🚀 NEW GEM ALERT: {token_name}",
+    "💎 HIGH POTENTIAL: {token_name}",
+    "🔥 HOT LAUNCH: {token_name}", 
+    "⭐ EXCLUSIVE FIND: {token_name}",
+    "⚡ ROCKET READY: {token_name}",
+    "🎯 PRIME TARGET: {token_name}",
+    "✨ SHINING GEM: {token_name}",
+    "🌟 ELITE DISCOVERY: {token_name}",
+    "💫 MOONSHOT: {token_name}",
+    "🦄 UNICORN SPOTTED: {token_name}"
+]
+
+CRYPTO_HASHTAGS = [
+    "#Crypto", "#DeFi", "#Web3", "#Blockchain", "#NFT",
+    "#Solana", "#SOL", "#MemeCoin", "#Altcoin", "#CryptoGem",
+    "#Trading", "#Investing", "#Moon", "#ToTheMoon", "#HODL"
+]
+
+BOT_LINKS = [
+    "🛡 Trojan: https://t.me/solana_trojanbot?start=r-gemwagmi0001",
+    "🐉 Soul: https://t.me/soul_sniper_bot?start=WpQErcIT5oHr", 
+    "🤖 MEVX: https://t.me/Mevx?start=wN17b0M1lsJs",
+    "🌐 Algora: https://t.me/algoratradingbot?start=r-tff-{contract}",
+    "🚀 Trojan N: https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}",
+    "🔗 GMGN: https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC",
+    "💎 Padre: https://trade.padre.gg/rk/gemwagmi",
+    "🔥 Axiom: https://axiom.trade/@gemwagmi"
+]
+
+class TweetManager:
+    def __init__(self):
+        self.title_index = 0
+        self.hashtag_batch_size = 5
+        
+    def get_next_title(self, token_name):
+        title = TWEET_TITLES[self.title_index].format(token_name=token_name.upper())
+        self.title_index = (self.title_index + 1) % len(TWEET_TITLES)
+        return title
+    
+    def get_hashtags(self):
+        selected = random.sample(CRYPTO_HASHTAGS, min(self.hashtag_batch_size, len(CRYPTO_HASHTAGS)))
+        return " ".join(selected)
+    
+    def build_tweet_content(self, token_name, market_cap, contract, additional_info=""):
+        title = self.get_next_title(token_name)
+        
+        tweet_content = f"""{title}
+
+💰 Token: ${token_name.upper()}
+📊 Market Cap: {market_cap}
+🔗 Contract: {contract[:8]}...{contract[-6:]}
+
+{additional_info}
+
+{self.get_hashtags()}"""
+        
+        if len(tweet_content) > 280:
+            tweet_content = tweet_content[:277] + "..."
+            
+        return tweet_content
+
+tweet_manager = TweetManager()
+
+def post_to_x_enhanced(token_name, market_cap, contract, additional_info=""):
+    try:
+        enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
+        if enabled != "enabled":
+            logger.info("X paylaşımı devre dışı.")
+            return False
+
+        if not client:
+            logger.warning("X client not configured")
+            return False
+
+        tweet_content = tweet_manager.build_tweet_content(
+            token_name, market_cap, contract, additional_info
+        )
+
+        response = client.create_tweet(text=tweet_content)
+        tweet_id = response.data["id"]
+        
+        logger.info(f"✓ ENHANCED TWEET SENT → https://x.com/gemsnper/status/{tweet_id}")
+        logger.info(f"Tweet content: {tweet_content}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Tweet gönderilemedi: {e}")
+        return False
+
 # ====================== BURADAN İTİBAREN SIRAYI BOZMA! ======================
-# 1. Önce API_ID, API_HASH, BOT_TOKEN tanımla
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-# 2. Şimdi Telegram client'ları tanımla (API_ID artık var)
 bot_client = TelegramClient('bot', API_ID, API_HASH)
 user_client = TelegramClient('user', API_ID, API_HASH)
 
-# 3. Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24).hex()
 
-# 4. Diğer ortam değişkenleri
 DB_NAME = os.environ.get("DB_NAME", "wagmi_82kq_new")
 DB_USER = os.environ.get("DB_USER", "wagmi_82kq_new_user")
 DB_PASS = os.environ.get("DB_PASS")
@@ -45,7 +133,6 @@ X_CONSUMER_SECRET = os.environ.get("X_CONSUMER_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET")
 
-# 5. X için tweepy v2 client (KESİNLİKLE ÇALIŞIR)
 client = tweepy.Client(
     consumer_key=X_CONSUMER_KEY,
     consumer_secret=X_CONSUMER_SECRET,
@@ -54,34 +141,41 @@ client = tweepy.Client(
 )
 # =========================================================================
 
+# BU SATIRDAN SONRA ESKİ KODUNUN GERİ KALANINI EKLEYECEĞİZ
 def post_to_x(message):
-    enabled = get_bot_setting_sync("x_posting_enabled") or "enabled"
-    if enabled != "enabled":
-        logger.info("X paylaşımı devre dışı.")
-        return False
-
-    if not all([X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]):
-        logger.warning("X anahtarları eksik! Tweet atılamıyor.")
-        return False
-
-    text = (message or "").strip()
-    if not text:
-        return False
-    if len(text) > 280:
-        text = text[:277] + "..."
-
+    """ESKİ fonksiyon - GERİYE UYUMLULUK İÇİN"""
     try:
-        response = client.create_tweet(text=text)
-        tweet_id = response.data["id"]
-        logger.info(f"✓ TWEET BAŞARIYLA ATILDI → https://x.com/gemsnper/status/{tweet_id}")
-        return True
-    except tweepy.Unauthorized:
-        logger.error("X API: Anahtarların Read+Write izni yok! Developer Portal'dan kontrol et.")
-    except tweepy.Forbidden:
-        logger.error("X API: Elevated erişim eksik! App izinlerini yükselt.")
+        lines = message.split('\n')
+        token_name = "UNKNOWN"
+        market_cap = "N/A"
+        
+        for line in lines:
+            if line.startswith('💰 $'):
+                token_name = line.replace('💰 $', '').strip()
+            elif '*Market Cap:*' in line:
+                market_cap = line.replace('*Market Cap:*', '').strip()
+        
+        contract_match = re.search(r'`([A-Za-z0-9]{32,50})`', message)
+        contract = contract_match.group(1) if contract_match else "unknown"
+        
+        liquidity = "N/A"
+        minting = "N/A"
+        for line in lines:
+            if '*Liquidity:*' in line:
+                liquidity = line.replace('*Liquidity:*', '').strip()
+            elif '*Minting:*' in line:
+                minting = line.replace('*Minting:*', '').strip()
+        
+        # Rastgele bot linki + chart
+        random_bot = random.choice(BOT_LINKS).format(contract=contract)
+        chart_info = f"📈 Chart: https://dexscreener.com/solana/{contract}\n{random_bot}"
+        additional_info = f"💦 Liquidity: {liquidity}\n🔥 Minting: {minting}\n\n{chart_info}"
+        
+        return post_to_x_enhanced(token_name, market_cap, contract, additional_info)
+        
     except Exception as e:
-        logger.error(f"Tweet atılamadı: {e}")
-    return False
+        logger.error(f"Error converting old format to new: {e}")
+        return False
     
 def get_connection():
     try:
@@ -1090,25 +1184,18 @@ async def channel_handler(event):
         new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
         buttons = build_announcement_buttons(contract)
-        # X için buton URL'lerini ekle
-        new_text_for_x = new_text + f"\n\n📈 Chart: https://dexscreener.com/solana/{contract}\n🛡 Trojan: https://t.me/solana_trojanbot?start=r-gemwagmi0001"
-        target_channels = await get_channels('target')
-        if not target_channels:
-            logger.warning("No target channels configured to send new call announcement.")
-            return
-        announcement_id = None
-        for target_channel_info in target_channels:
-            target_channel_id = target_channel_info["channel_id"]
-            try:
-                logger.info(f"Sending new call announcement for '{token_name}' ({contract}) to target channel ID: {target_channel_id}.")
-                msg = await retry_telethon_call(bot_client.send_message(
-                    target_channel_id,
-                    message=new_text,
-                    file='https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3amJmaWxtZzYwdWZhaWZvdzg2MDMwNTFpcndnc3A1dGljbnR4YjZidSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U4Go851LRU7icahyaj/giphy.gif',
-                    buttons=buttons
-                ))
-                logger.info(f"New announcement sent to {target_channel_id}, message_id: {msg.id}.")
-                post_to_x(new_text_for_x)  # X'e gönder
+        # ✅ YENİ X TWEET KODU
+        random_bot = random.choice(BOT_LINKS).format(contract=contract)
+        chart_info = f"📈 Chart: https://dexscreener.com/solana/{contract}\n{random_bot}"
+        additional_info = f"💦 Liquidity: {data.get('liquidity_status', 'N/A')}\n🔥 Minting: {data.get('mint_status', 'N/A')}\n\n{chart_info}"
+        
+        x_success = post_to_x_enhanced(token_name, data.get('market_cap', 'N/A'), contract, additional_info)
+
+        if x_success:
+            logger.info(f"✓ Enhanced X post sent for {token_name}")
+        else:
+            logger.warning(f"✗ Failed to send X post for {token_name}")
+                
                 await retry_telethon_call(bot_client.send_message(
                     target_channel_id,
                     message=contract
