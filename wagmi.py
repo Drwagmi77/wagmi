@@ -1183,7 +1183,7 @@ async def channel_handler(event):
             token_name = "UNKNOWN"
         new_text = build_new_template(token_name, contract, data.get('market_cap', 'N/A'),
                                      data.get('liquidity_status', 'N/A'), data.get('mint_status', 'N/A'))
-               buttons = build_announcement_buttons(contract)
+        buttons = build_announcement_buttons(contract)
         
         # ✅ YENİ X TWEET KODU
         random_bot = random.choice(BOT_LINKS).format(contract=contract)
