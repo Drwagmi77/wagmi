@@ -72,7 +72,7 @@ class TweetManager:
 
 💰 Token: ${token_name.upper()}
 📊 Market Cap: {market_cap}
-🔗 Contract: {contract[:8]}...{contract[-6:]}
+🔗 Contract: {contract}
 
 {additional_info}
 
