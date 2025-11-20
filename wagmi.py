@@ -46,7 +46,7 @@ BOT_LINKS = [
     "🤖 MEVX: https://t.me/Mevx?start=wN17b0M1lsJs",
     "🌐 Algora: https://t.me/algoratradingbot?start=r-tff-{contract}",
     "🚀 Trojan N: https://t.me/nestor_trojanbot?start=r-shielzuknf5b-{contract}",
-    "🔗 GMGN: https://t.me/GMGN_sol03_bot?start=CcJ5M3wBy35JHLp4csmFF8QyxdeHuKasPqKQeFa1TzLC",
+    "🔗 GMGN: https://t.me/GMGN_sol03_bot?start=i_h2UPztEG",
     "💎 Padre: https://trade.padre.gg/rk/gemwagmi",
     "🔥 Axiom: https://axiom.trade/@gemwagmi"
 ]
